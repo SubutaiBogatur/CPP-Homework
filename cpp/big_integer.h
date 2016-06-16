@@ -1,11 +1,14 @@
 #ifndef BIG_INTEGER_H
 #define BIG_INTEGER_H
 
-//Code was written and tested by Aleksandr Tukallo with Microsoft Visual Studio 2013 as a homework for CPP-course in IFMO university.
-
 #include <vector>
 #include <iosfwd>
 #include <cstdint>
+
+struct big_integer;
+
+//it must be declared static before friend.
+static void compare_length(big_integer const& a, big_integer const& b, big_integer const **maxptr, big_integer const **minptr);
 
 struct big_integer
 {
@@ -63,8 +66,9 @@ private: //TODO: make private after debugging
 	big_integer& correct_subtraction(big_integer const& other);
 	void erase_leading_zeroes();
 
-	friend static void compare_length(big_integer const& a, big_integer const& b, big_integer const **maxptr, big_integer const **minptr);
-	
+	//Can not be defined as friend and static in one string. Static must be declared earlier.
+	friend void compare_length(big_integer const& a, big_integer const& b, big_integer const **maxptr, big_integer const **minptr);
+
 	big_integer& binary_operation(char operand, big_integer const& other);
 	big_integer& convert_to_additional_code();
 

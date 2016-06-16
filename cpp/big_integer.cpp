@@ -2,8 +2,6 @@
 #include <string>
 #include<algorithm>
 
-//Code was written and tested by Aleksandr Tukallo with Microsoft Visual Studio 2013 as a homework for CPP-course in IFMO university.
-
 //invariant:
 // data.size() equals number of digits of big_int in BASE
 
@@ -548,7 +546,7 @@ big_integer& big_integer::recognize_operation(char operand, big_integer const& o
 		}
 		return *this;
 	}
-	if (this->sign == 0 && other.sign == 1 || this->sign == 1 && other.sign == 0)
+	if ((this->sign == 0 && other.sign == 1) || (this->sign == 1 && other.sign == 0))
 		this->sign = 1;
 	else
 		this->sign = 0;
@@ -743,12 +741,12 @@ big_integer& big_integer::div_long_long_unsigned(big_integer const& b)
 	big_integer tmp;
 	tmp.data.resize(b.data.size());
 	size_t x = a.data.size() - b.data.size();
-	for (int32_t j = 0; j < b.data.size(); j++)//kind of range constructor
+	for (int32_t j = 0; j < (int32_t)b.data.size(); j++)//kind of range constructor
 		tmp.data[j] = a.data[x + j];
 
-	for (int32_t i = x; i >= 0; i--)
+	for (int32_t i = (int32_t)x; i >= 0; i--)
 	{
-		if (i != x) //if not first iteration
+		if (i != (int32_t)x) //if not first iteration
 		{
 			tmp = sub_res;
 			tmp.data.resize(tmp.data.size() + 1);
