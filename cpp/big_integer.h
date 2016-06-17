@@ -53,24 +53,23 @@ struct big_integer
 
 	friend std::string to_string(big_integer const& a);
 
-private: //TODO: make private after debugging
+private:
 	std::vector<uint32_t> data;
-	const uint64_t BASE = (uint64_t)(UINT32_MAX) + 1;
-	//const uint64_t BASE = 10;
+	const uint64_t BASE = static_cast<uint64_t>(UINT32_MAX) + 1;
 	bool sign; //the same as bit for sign: zero = plus; 
 
-	bool is_zero() const;
+	inline bool is_zero() const;
 	int8_t compare(big_integer const& a) const;
 	int8_t compare_by_abs(big_integer const& a) const;
 	big_integer& recognize_operation(char operand, big_integer const& other);
-	big_integer& correct_subtraction(big_integer const& other);
-	void erase_leading_zeroes();
+	inline big_integer& correct_subtraction(big_integer const& other);
+	inline void erase_leading_zeroes();
 
 	//Can not be defined as friend and static in one string. Static must be declared earlier.
 	friend void compare_length(big_integer const& a, big_integer const& b, big_integer const **maxptr, big_integer const **minptr);
 
 	big_integer& binary_operation(char operand, big_integer const& other);
-	big_integer& convert_to_additional_code();
+	inline big_integer& convert_to_additional_code();
 
 	big_integer& add_long_long_unsigned(big_integer const& other);
 	big_integer& add_long_short_unsigned(uint32_t const other);
