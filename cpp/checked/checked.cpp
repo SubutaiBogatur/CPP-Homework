@@ -90,8 +90,7 @@ public:
     {
         if (this->value == std::numeric_limits<T>::min())
             throw checked_exception("unary minus signed overflow");
-        checked<T> a = *this, b = checked<T>((T) -1);
-        return a * b;
+        return checked<T>(this->value * (T) (-1));
     }
     checked<T> unary_min_impl(unsigned_tag) const
     {
@@ -158,8 +157,10 @@ template<typename T>
 checked<T> mul_impl(checked<T> const& lhs, checked<T> const& rhs, signed_tag)
 {
     //mul for signed
-    if ((std::abs(lhs.value) > std::numeric_limits<T>::max() / std::abs(rhs.value)) ||
-        ((rhs.value == -1) && (lhs.value == std::numeric_limits<T>::min())))
+    if (lhs.value != 0 && rhs.value != 0 &&
+        ((std::abs(lhs.value) > std::numeric_limits<T>::max() / std::abs(rhs.value)) ||
+         ((rhs.value == -1) && (lhs.value == std::numeric_limits<T>::min())) ||
+         ((lhs.value == -1) && (rhs.value == std::numeric_limits<T>::min()))))
         throw checked_exception("mul signed overflow\n");
     return checked<T>(lhs.value * rhs.value);
 }
@@ -167,7 +168,8 @@ template<typename T>
 checked<T> mul_impl(checked<T> const& lhs, checked<T> const& rhs, unsigned_tag)
 {
     //mul for unsigned
-    if (lhs.value > std::numeric_limits<T>::max() / rhs.value)
+    if (lhs.value != 0 && rhs.value != 0 &&
+        (lhs.value > std::numeric_limits<T>::max() / rhs.value))
         throw checked_exception("mul unsigned overflow\n");
     return checked<T>(lhs.value * rhs.value);
 }
@@ -183,14 +185,14 @@ checked<T> div_impl(checked<T> const& lhs, checked<T> const& rhs, signed_tag)
 {
     //div for signed
     if ((rhs.value == -1) && (lhs.value == std::numeric_limits<T>::min()))
-        throw checked_exception("div unsigned overflow\n");
+        throw checked_exception("div signed overflow\n");
     return checked<T>(lhs.value / rhs.value);
 }
 template<typename T>
 checked<T> div_impl(checked<T> const& lhs, checked<T> const& rhs, unsigned_tag)
 {
     //div for unsigned
-    //it looks like for unsigned integer numbers overflow doesn't happen
+    //it looks like overflow doesn't happen when dividing unsigned integer numbers 
     return checked<T>(lhs.value / rhs.value);
 }
 
@@ -204,31 +206,15 @@ int main()
 {
     try
     {
-        {
-            checked<unsigned> v1(10);
-            checked<unsigned> v2(std::numeric_limits<unsigned>::max());
-            v1 + v2; //exception
-            v1 - v2; //e
-            v1 * v2; //e
-            v1 / v2; //ok
-        }
+        typedef int8_t type;
 
         {
-            checked<int> v1(-1000);
-            checked<int> v2(std::numeric_limits<int>::max());
-            v1 + v2; //o
-            v1 - v2; //e
-            v1 * v2; //e
-            v1 / v2; //o
-        }
-
-        {
-            checked<int> v1(-1000);
-            checked<int> v2(std::numeric_limits<int>::min());
-            v1 + v2; //e
-            v1 - v2; //o
-            v1 * v2; //e
-            v1 / v2; //o
+            checked<type> v1(100);
+            checked<type> v2(std::numeric_limits<type>::min());
+            v1 + v2;
+            v1 - v2;
+            v1 * v2;
+            v1 / v2;
             -v1;
             -v2;
         }
