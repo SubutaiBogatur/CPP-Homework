@@ -1,22 +1,27 @@
+//
+// Created by Aleksandr Tukallo on 12.06.16.
+//
+
+
 #include"big_integer.h"
 #include <string>
 #include<algorithm>
 #include <iostream>
 
 //invariant:
-// data.size() equals number of digits of big_int in BASE
+// arr.size() equals number of digits of big_int in BASE
 
 big_integer::big_integer()
 {
     this->sign = 0;
-    this->data.resize(1);
-    this->data[0] = 0;
+    this->arr.resize(1);
+    this->arr[0] = 0;
 }
 
 //copy constructor
 big_integer::big_integer(big_integer const& other)
 {
-    this->data = other.data;
+    this->arr = other.arr;
     this->sign = other.sign;
 }
 
@@ -29,8 +34,8 @@ big_integer::big_integer(int32_t other)
         this->sign = 1;
         tmp = -tmp;
     }
-    this->data.resize(1);
-    this->data[0] = static_cast<uint32_t>(tmp);
+    this->arr.resize(1);
+    this->arr[0] = static_cast<uint32_t>(tmp);
 }
 
 big_integer::big_integer(std::string const& str)
@@ -43,19 +48,14 @@ big_integer::big_integer(std::string const& str)
     } else
         this->sign = 0;
 
-    this->data.push_back(0);
+    this->arr.resize(1);
+    this->arr[0] = 0;
+
     for (size_t i = j; i < str.size(); i++)
     {
         *this = this->mul_long_short_unsigned(10);
         *this = this->add_long_short_unsigned(static_cast<uint32_t>(str[i] - '0'));
     }
-}
-
-big_integer::~big_integer()
-{
-    //Nothing changes if we call ~vector. It was created without new, so it will delete itself automatically.
-    //this->data.~vector();
-    //We do not call vector destructor, 'cause big_integer calls destructors for all its fields, when being destroyed.
 }
 
 std::string to_string(big_integer const& a)
@@ -79,7 +79,7 @@ std::string to_string(big_integer const& a)
 
 big_integer& big_integer::operator=(big_integer const& other)
 {
-    this->data = other.data;
+    this->arr = other.arr;
     this->sign = other.sign;
     return (*this);
 }
@@ -265,31 +265,31 @@ big_integer& big_integer::operator<<=(int rhs) //shl
 
     uint32_t parts = static_cast<uint32_t>(rhs) / 32;
     uint32_t bits = static_cast<uint32_t>(rhs) % 32;
-    this->data.push_back(0);
+    this->arr.push_back(0);
 
     if (bits != 0)
     {
         uint32_t mask = ~((1U << (32U - bits)) - 1U);
-        for (size_t i = this->data.size() - 1; i > 0; i--)
+        for (size_t i = this->arr.size() - 1; i > 0; i--)
         {
-            mask &= this->data[i - 1];
+            mask &= this->arr[i - 1];
             mask >>= (32U - bits);
 
             uint32_t cur_part;
-            cur_part = this->data[i - 1];
+            cur_part = this->arr[i - 1];
             cur_part <<= bits;
 
-            this->data[i - 1] = cur_part;
-            this->data[i] |= mask;
+            this->arr[i - 1] = cur_part;
+            this->arr[i] |= mask;
         }
     }
-    this->data.resize(this->data.size() + parts);
+    this->arr.resize(this->arr.size() + parts);
 
-    for (size_t i = this->data.size(); i > static_cast<size_t>(parts); i--)
-        this->data[i - 1] = this->data[i - parts - 1]; //-1, because unsigned
+    for (size_t i = this->arr.size(); i > static_cast<size_t>(parts); i--)
+        this->arr[i - 1] = this->arr[i - parts - 1]; //-1, because unsigned
 
     for (size_t i = 0; i < parts; i++)
-        this->data[i] = 0;
+        this->arr[i] = 0;
 
     this->erase_leading_zeroes();
     return *this;
@@ -313,29 +313,29 @@ big_integer& big_integer::operator>>=(int rhs) //shr
     if (bits != 0)
     {
         uint32_t mask = ~((1U << (32U - bits)) - 1U);
-        for (size_t i = parts; i < this->data.size(); i++)
+        for (size_t i = parts; i < this->arr.size(); i++)
         {
-            uint32_t cur_part = this->data[i] >> bits;
-            if ((i == this->data.size() - 1) && this->sign)
+            uint32_t cur_part = this->arr[i] >> bits;
+            if ((i == this->arr.size() - 1) && this->sign)
                 cur_part |= mask;
 
-            this->data[i] = cur_part;
-            if (i < this->data.size() - 1)
+            this->arr[i] = cur_part;
+            if (i < this->arr.size() - 1)
             {
                 uint32_t prev = (1U << bits) - 1;
-                prev &= data[i + 1];
+                prev &= arr[i + 1];
                 prev <<= (32 - bits);
-                data[i] |= prev;
+                arr[i] |= prev;
             }
         }
     }
 
-    for (size_t i = parts; i < data.size(); i++)
-        this->data[i - parts] = this->data[i];
+    for (size_t i = parts; i < arr.size(); i++)
+        this->arr[i - parts] = this->arr[i];
 
     uint32_t mask = (!this->sign ? 0 : std::numeric_limits<uint32_t>::max());
     for (size_t i = 0; i < parts; i++)
-        this->data[this->data.size() - i - 1] = mask;
+        this->arr[this->arr.size() - i - 1] = mask;
 
     this->convert_to_additional_code();
     this->erase_leading_zeroes();
@@ -355,8 +355,8 @@ inline big_integer& big_integer::convert_to_additional_code()
     if (this->sign) //if negative
     {
         (*this)++; //++ to negative is sub by abs
-        for (size_t i = 0; i < data.size(); i++)
-            data[i] = ~data[i];
+        for (size_t i = 0; i < arr.size(); i++)
+            arr[i] = ~arr[i];
 
         //this->sign = 0;
     }
@@ -373,13 +373,13 @@ big_integer& big_integer::binary_operation(uint32_t (*ptr)(uint32_t const&, uint
 
     big_integer const *maxptr, *minptr;
     compare_length(*this, right, &maxptr, &minptr);
-    this->data.resize(maxptr->data.size());
+    this->arr.resize(maxptr->arr.size());
 
-    for (size_t i = 0; i < minptr->data.size(); i++)
-        this->data[i] = (*ptr)(maxptr->data[i], minptr->data[i]);
+    for (size_t i = 0; i < minptr->arr.size(); i++)
+        this->arr[i] = (*ptr)(maxptr->arr[i], minptr->arr[i]);
 
-    for (size_t i = minptr->data.size(); i < maxptr->data.size(); i++)
-        this->data[i] = (*ptr)(maxptr->data[i], (!minptr->sign ? 0 : std::numeric_limits<uint32_t>::max()));
+    for (size_t i = minptr->arr.size(); i < maxptr->arr.size(); i++)
+        this->arr[i] = (*ptr)(maxptr->arr[i], (!minptr->sign ? 0 : std::numeric_limits<uint32_t>::max()));
 
     this->sign = static_cast<bool>((*ptr)(static_cast<uint32_t>(this->sign), static_cast<uint32_t>(right.sign)));
 
@@ -396,7 +396,7 @@ big_integer& big_integer::binary_operation(uint32_t (*ptr)(uint32_t const&, uint
 // 0, if not zero
 inline bool big_integer::is_zero() const
 {
-    return ((this->data.size() == 1) && (this->data[0] == 0));
+    return ((this->arr.size() == 1) && (this->arr[0] == 0));
 }
 
 //pre:
@@ -416,13 +416,13 @@ int8_t big_integer::compare(big_integer const& a) const
         return this->compare_by_abs(a);
     }
 
-    if (this->data.size() > a.data.size()) return -1;
-    if (this->data.size() < a.data.size()) return 1;
-    for (size_t i = this->data.size(); i > 0; i--)
+    if (this->arr.size() > a.arr.size()) return -1;
+    if (this->arr.size() < a.arr.size()) return 1;
+    for (size_t i = this->arr.size(); i > 0; i--)
     {
-        if (this->data[i - 1] != a.data[i - 1])
+        if (this->arr[i - 1] != a.arr[i - 1])
         {
-            if (this->data[i - 1] > a.data[i - 1]) return -1;
+            if (this->arr[i - 1] > a.arr[i - 1]) return -1;
             return 1;
         }
     }
@@ -434,13 +434,13 @@ int8_t big_integer::compare(big_integer const& a) const
 // -1, if *this < a
 int8_t big_integer::compare_by_abs(big_integer const& a) const
 {
-    if (this->data.size() > a.data.size()) return 1;
-    if (this->data.size() < a.data.size()) return -1;
-    for (size_t i = this->data.size(); i > 0; i--)
+    if (this->arr.size() > a.arr.size()) return 1;
+    if (this->arr.size() < a.arr.size()) return -1;
+    for (size_t i = this->arr.size(); i > 0; i--)
     {
-        if (this->data[i - 1] != a.data[i - 1])
+        if (this->arr[i - 1] != a.arr[i - 1])
         {
-            if (this->data[i - 1] > a.data[i - 1]) return 1;
+            if (this->arr[i - 1] > a.arr[i - 1]) return 1;
             return -1;
         }
     }
@@ -450,10 +450,10 @@ int8_t big_integer::compare_by_abs(big_integer const& a) const
 //removes all leading zeroes, except the only one, if the value of b_i is zero. 
 inline void big_integer::erase_leading_zeroes()
 {
-    for (size_t i = this->data.size(); i > 1; i--)
+    for (size_t i = this->arr.size(); i > 1; i--)
     {
-        if (this->data[i - 1] == 0)
-            this->data.pop_back();
+        if (this->arr[i - 1] == 0)
+            this->arr.pop_back();
         else
             break;
     }
@@ -549,7 +549,7 @@ inline big_integer& big_integer::correct_subtraction(big_integer const& other)
 static void
 compare_length(big_integer const& a, big_integer const& b, big_integer const **maxptr, big_integer const **minptr)
 {
-    if (a.data.size() > b.data.size())
+    if (a.arr.size() > b.arr.size())
     {
         (*maxptr) = &a;
         (*minptr) = &b;
@@ -563,8 +563,8 @@ compare_length(big_integer const& a, big_integer const& b, big_integer const **m
 //returns other sum of this and other: 2 positive b_i. The result is being put in *this and reference to this is returned.
 big_integer& big_integer::add_long_long_unsigned(big_integer const& other)
 {
-    if (other.data.size() == 1)
-        return this->add_long_short_unsigned(other.data[0]);
+    if (other.arr.size() == 1)
+        return this->add_long_short_unsigned(other.arr[0]);
 
     uint64_t cur_sum;
     uint64_t carry = 0;
@@ -573,21 +573,21 @@ big_integer& big_integer::add_long_long_unsigned(big_integer const& other)
     big_integer const *minptr;
     compare_length(*this, other, &maxptr, &minptr);
 
-    this->data.resize(maxptr->data.size());
-    for (size_t i = 0; i < minptr->data.size(); i++)
+    this->arr.resize(maxptr->arr.size());
+    for (size_t i = 0; i < minptr->arr.size(); i++)
     {
-        cur_sum = static_cast<uint64_t>(minptr->data[i]) + static_cast<uint64_t>(maxptr->data[i]) + carry;
-        this->data[i] = static_cast<uint32_t>(cur_sum % BASE);
+        cur_sum = static_cast<uint64_t>(minptr->arr[i]) + static_cast<uint64_t>(maxptr->arr[i]) + carry;
+        this->arr[i] = static_cast<uint32_t>(cur_sum % BASE);
         carry = cur_sum / BASE;
     }
-    for (size_t i = minptr->data.size(); i < maxptr->data.size(); i++)
+    for (size_t i = minptr->arr.size(); i < maxptr->arr.size(); i++)
     {
-        cur_sum = static_cast<uint64_t>(maxptr->data[i]) + carry;
-        this->data[i] = static_cast<uint32_t>(cur_sum % BASE);
+        cur_sum = static_cast<uint64_t>(maxptr->arr[i]) + carry;
+        this->arr[i] = static_cast<uint32_t>(cur_sum % BASE);
         carry = cur_sum / BASE;
     }
     if (carry != 0)
-        this->data.push_back(static_cast<uint32_t>(carry));
+        this->arr.push_back(static_cast<uint32_t>(carry));
 
     this->erase_leading_zeroes();
     return *this;
@@ -600,14 +600,14 @@ big_integer& big_integer::add_long_short_unsigned(uint32_t const other)
     size_t i = 0;
     while (carry)
     {
-        cur_sum = this->data[i] + carry;
-        this->data[i] = static_cast<uint32_t>(cur_sum % BASE);
+        cur_sum = this->arr[i] + carry;
+        this->arr[i] = static_cast<uint32_t>(cur_sum % BASE);
         carry = cur_sum / BASE;
         i++;
-        if (i == this->data.size())
+        if (i == this->arr.size())
         {
             if (carry)
-                this->data.push_back(static_cast<uint32_t>(carry));
+                this->arr.push_back(static_cast<uint32_t>(carry));
             break;
         }
     }
@@ -618,13 +618,13 @@ big_integer& big_integer::sub_long_long_unsigned(big_integer const& other)
 {
     uint32_t carry = 0;
     int64_t cur_sub;
-    for (size_t i = 0; i < other.data.size() || carry; i++)
+    for (size_t i = 0; i < other.arr.size() || carry; i++)
     {
-        cur_sub = static_cast<uint64_t>(this->data[i]) - static_cast<uint64_t>(carry) -
-                  (i < other.data.size() ? static_cast<uint64_t>(other.data[i]) : 0);
+        cur_sub = static_cast<uint64_t>(this->arr[i]) - static_cast<uint64_t>(carry) -
+                  (i < other.arr.size() ? static_cast<uint64_t>(other.arr[i]) : 0);
         carry = static_cast<uint32_t>(cur_sub < 0);
         if (carry) cur_sub += static_cast<uint64_t>(BASE);
-        this->data[i] = static_cast<uint32_t>(cur_sub);
+        this->arr[i] = static_cast<uint32_t>(cur_sub);
     }
     this->erase_leading_zeroes();
     return *this;
@@ -633,26 +633,28 @@ big_integer& big_integer::sub_long_long_unsigned(big_integer const& other)
 //multiply *this by b and put result in *this
 big_integer& big_integer::mul_long_long_unsigned(big_integer const& b)
 {
-    if (b.data.size() == 1)
-        return this->mul_long_short_unsigned(b.data[0]);
+    if (b.arr.size() == 1)
+        return this->mul_long_short_unsigned(b.arr[0]);
 
     big_integer const a(*this);
-    this->data.clear();
-    this->data.resize(a.data.size() + b.data.size() + 1, 0);
+
+    this->arr.resize(a.arr.size() + b.arr.size() + 1);
+    for (size_t p = 0; p < a.arr.size() + b.arr.size() + 1; p++)
+        arr[p] = 0;
 
     uint64_t cur_mul, carry, cur_sum;
-    for (size_t i = 0; i < a.data.size(); i++)
+    for (size_t i = 0; i < a.arr.size(); i++)
     {
         carry = 0;
-        for (size_t j = 0; j < b.data.size(); j++)
+        for (size_t j = 0; j < b.arr.size(); j++)
         {
-            cur_mul = static_cast<uint64_t>(a.data[i]) * static_cast<uint64_t>(b.data[j]);
-            cur_sum = cur_mul + static_cast<uint64_t>(this->data[i + j]) + carry;
-            this->data[i + j] = static_cast<uint32_t>(cur_sum % BASE);
+            cur_mul = static_cast<uint64_t>(a.arr[i]) * static_cast<uint64_t>(b.arr[j]);
+            cur_sum = cur_mul + static_cast<uint64_t>(this->arr[i + j]) + carry;
+            this->arr[i + j] = static_cast<uint32_t>(cur_sum % BASE);
             carry = cur_sum / BASE;
         }
         if (carry != 0)
-            this->data[i + b.data.size()] = static_cast<uint32_t>(carry);
+            this->arr[i + b.arr.size()] = static_cast<uint32_t>(carry);
     }
     this->erase_leading_zeroes();
     return *this;
@@ -661,14 +663,14 @@ big_integer& big_integer::mul_long_long_unsigned(big_integer const& b)
 big_integer& big_integer::mul_long_short_unsigned(uint32_t const other)
 {
     uint64_t cur_mul, carry = 0;
-    for (size_t i = 0; i < this->data.size(); i++)
+    for (size_t i = 0; i < this->arr.size(); i++)
     {
-        cur_mul = static_cast<uint64_t>(this->data[i]) * static_cast<uint64_t>(other) + carry;
-        this->data[i] = static_cast<uint32_t>(cur_mul % BASE);
+        cur_mul = static_cast<uint64_t>(this->arr[i]) * static_cast<uint64_t>(other) + carry;
+        this->arr[i] = static_cast<uint32_t>(cur_mul % BASE);
         carry = cur_mul / BASE;
     }
     if (carry != 0)
-        this->data.push_back(static_cast<uint32_t>(carry));
+        this->arr.push_back(static_cast<uint32_t>(carry));
 
     this->erase_leading_zeroes();
     return *this;
@@ -679,52 +681,54 @@ big_integer& big_integer::div_long_long_unsigned(big_integer const& b)
     int8_t comparison = b.compare_by_abs(*this);
     if (comparison == 1) //b is bigger, than *this
     {
-        this->data.clear();
-        this->data.resize(1, 0);
+        this->arr.clear();
+        this->arr.resize(1);
+        this->arr[0] = 0;
         return *this;
     } else if (comparison == 0) //equal
     {
-        this->data.clear();
-        this->data.resize(1, 1);
+        this->arr.clear();
+        this->arr.resize(1);
+        this->arr[0] = 1;
         return *this;
     }
 
-    if (b.data.size() == 1)
+    if (b.arr.size() == 1)
     {
-        if (this->data.size() == 1) //div_short_short
+        if (this->arr.size() == 1) //div_short_short
         {
-            uint32_t div_res = this->data[0] / b.data[0];
-            this->data.resize(1);
-            this->data[0] = div_res;
+            uint32_t div_res = this->arr[0] / b.arr[0];
+            this->arr.resize(1);
+            this->arr[0] = div_res;
             return *this;
         } else //div_long_short. <- makes tests 10 times faster.
         {
-            this->get_remainder(b.data[0]);
+            this->get_remainder(b.arr[0]);
             return *this;
         }
     }
 
     big_integer a(*this);
-    this->data.clear();
-    this->data.resize(a.data.size() - b.data.size() + 1);
+    this->arr.clear();
+    this->arr.resize(a.arr.size() - b.arr.size() + 1);
     big_integer sub_res;
 
     big_integer tmp;
-    tmp.data.resize(b.data.size());
-    size_t x = a.data.size() - b.data.size();
-    for (size_t j = 0; j < b.data.size(); j++)//kind of range constructor
-        tmp.data[j] = a.data[x + j];
+    tmp.arr.resize(b.arr.size());
+    size_t x = a.arr.size() - b.arr.size();
+    for (size_t j = 0; j < b.arr.size(); j++)//kind of range constructor
+        tmp.arr[j] = a.arr[x + j];
 
     for (int32_t i = static_cast<int32_t>(x); i >= 0; i--) //i is signed, because it becomes negative finally
     {
         if (i != static_cast<int32_t>(x)) //if not first iteration
         {
             tmp = sub_res;
-            tmp.data.resize(tmp.data.size() + 1);
-            for (size_t k = tmp.data.size() - 1; k > 0; k--) //move by one to right
-                tmp.data[k] = tmp.data[k - 1];
+            tmp.arr.resize(tmp.arr.size() + 1);
+            for (size_t k = tmp.arr.size() - 1; k > 0; k--) //move by one to right
+                tmp.arr[k] = tmp.arr[k - 1];
 
-            tmp.data[0] = a.data[i];
+            tmp.arr[0] = a.arr[i];
             tmp.erase_leading_zeroes();
         }
 
@@ -741,7 +745,7 @@ big_integer& big_integer::div_long_long_unsigned(big_integer const& b)
             else
                 r = m;
         }
-        this->data[i] = static_cast<uint32_t>(l);
+        this->arr[i] = static_cast<uint32_t>(l);
 
         big_integer b_copy(b);
         sub_res = tmp.sub_long_long_unsigned(b_copy.mul_long_short_unsigned(static_cast<uint32_t>(l)));
@@ -759,10 +763,10 @@ big_integer& big_integer::div_long_long_unsigned(big_integer const& b)
 uint32_t big_integer::get_remainder(uint32_t const other)
 {
     uint64_t cur_sum, carry = 0;
-    for (size_t i = this->data.size(); i > 0; i--)
+    for (size_t i = this->arr.size(); i > 0; i--)
     {
-        cur_sum = static_cast<uint64_t>(this->data[i - 1]) + carry * BASE;
-        this->data[i - 1] = static_cast<uint32_t>((cur_sum / static_cast<uint64_t>(other)));
+        cur_sum = static_cast<uint64_t>(this->arr[i - 1]) + carry * BASE;
+        this->arr[i - 1] = static_cast<uint32_t>((cur_sum / static_cast<uint64_t>(other)));
         carry = cur_sum % static_cast<uint64_t>(other);
     }
 

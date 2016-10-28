@@ -1,9 +1,11 @@
+//
+// Created by Aleksandr Tukallo on 12.06.16.
+//
+
 #ifndef BIG_INTEGER_H
 #define BIG_INTEGER_H
 
-#include <vector>
-#include <iosfwd>
-#include <cstdint>
+#include "optimized_vector.h"
 
 struct big_integer;
 
@@ -17,8 +19,6 @@ struct big_integer
     big_integer(big_integer const& other);
     big_integer(int32_t a);
     explicit big_integer(std::string const& str);
-
-    ~big_integer();
 
     big_integer& operator=(big_integer const& other);
 
@@ -55,12 +55,14 @@ struct big_integer
     friend std::string to_string(big_integer const& a);
 
 private:
-    std::vector<uint32_t> data;
+    //member variables:
+    optimized_vector arr;
 
     //static for BASE speeds up tests to almost TEN TIMES
     static const uint64_t BASE = static_cast<uint64_t>(UINT32_MAX) + 1;
     bool sign; //the same as bit for sign: zero = plus;
 
+    //functions:
     inline bool is_zero() const;
     int8_t compare(big_integer const& a) const;
     int8_t compare_by_abs(big_integer const& a) const;

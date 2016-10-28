@@ -536,8 +536,8 @@ TEST(correctness, string_conv)
 
 namespace
 {
-    unsigned const number_of_iterations = 10;
-    size_t const number_of_multipliers = 1000;
+    unsigned const number_of_iterations = 10; //default 10
+    size_t const number_of_multipliers = 1000; //default 1000
 
     int myrand()
     {
