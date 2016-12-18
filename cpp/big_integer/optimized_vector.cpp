@@ -3,9 +3,9 @@
 //
 
 #include <assert.h>
-#include <iostream>
 #include "optimized_vector.h"
 
+//no real copying is made here because of COW optimization
 void optimized_vector::copy_optimized_vector(optimized_vector const& other)
 {
     if (other.is_small)
@@ -28,10 +28,10 @@ optimized_vector& optimized_vector::operator=(const optimized_vector& other)
 
 //main function for copy-on-write optimization.
 //when the vector is changed, if (*this) is not the only one, who uses vector,
-//another copy of vector for (*this) is created
+//another copy of vector for (*this) is created. Function never called, when is_small
 void optimized_vector::copy_if_not_unique()
 {
-    if(this->data_ptr.unique())
+    if (this->data_ptr.unique())
         return; //no copy made
     //else
 
@@ -43,7 +43,7 @@ void optimized_vector::copy_if_not_unique()
 // new_size is bigger, than current size
 void optimized_vector::resize(size_t new_size)
 {
-    if(is_small && new_size == 1)
+    if (is_small && new_size == 1)
         return; //number already exists
 
     //else: working with vector
@@ -76,18 +76,26 @@ void optimized_vector::clear()
     this->data_ptr->clear();
 }
 
+//get operator
 const uint32_t& optimized_vector::operator[](size_t position) const
 {
     if (is_small)
+    {
+        assert (position == 0);
         return number;
+    }
     //else
     return data_ptr->at(position);
 }
 
+//set operator
 uint32_t& optimized_vector::operator[](size_t position)
 {
     if (is_small)
+    {
+        assert (position == 0);
         return number;
+    }
     //else
     copy_if_not_unique();
     return data_ptr->at(position);
@@ -95,7 +103,11 @@ uint32_t& optimized_vector::operator[](size_t position)
 
 void optimized_vector::push_back(const uint32_t& value)
 {
-    if (is_small)
+    if (is_small && number == 0) //remains small
+    {
+        number = value;
+        return;
+    } else if (is_small) //is_small, but must become large
     {
         is_small = false;
         uint32_t tmp = number;

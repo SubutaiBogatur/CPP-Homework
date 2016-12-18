@@ -4,7 +4,6 @@
 
 
 #include"big_integer.h"
-#include <string>
 #include<algorithm>
 #include <iostream>
 
@@ -86,32 +85,32 @@ big_integer& big_integer::operator=(big_integer const& other)
 
 bool operator==(big_integer const& a, big_integer const& b)
 {
-    return (a.compare(b) == 0);
+    return (a.compare(b) == big_integer::compare_result::equals);
 }
 
 bool operator!=(big_integer const& a, big_integer const& b)
 {
-    return (a.compare(b) != 0);
+    return (a.compare(b) != big_integer::compare_result::equals);
 }
 
 bool operator<(big_integer const& a, big_integer const& b)
 {
-    return (a.compare(b) == -1);
+    return (a.compare(b) == big_integer::compare_result::less);
 }
 
 bool operator>(big_integer const& a, big_integer const& b)
 {
-    return (a.compare(b) == 1);
+    return (a.compare(b) == big_integer::compare_result::greater);
 }
 
 bool operator<=(big_integer const& a, big_integer const& b)
 {
-    return (a.compare(b) != 1);
+    return (a.compare(b) != big_integer::compare_result::greater);
 }
 
 bool operator>=(big_integer const& a, big_integer const& b)
 {
-    return (a.compare(b) != -1);
+    return (a.compare(b) != big_integer::compare_result::less);
 }
 
 big_integer& big_integer::operator+=(big_integer const& rhs)
@@ -341,7 +340,6 @@ big_integer& big_integer::operator>>=(int rhs) //shr
     this->erase_leading_zeroes();
 
     return *this;
-
 }
 
 big_integer operator>>(big_integer a, int b)
@@ -392,59 +390,49 @@ big_integer& big_integer::binary_operation(uint32_t (*ptr)(uint32_t const&, uint
 // gets *this b_i
 //post:
 // returns:
-// 1, is zero, sign doesn't matter
+// 1, if zero, sign doesn't matter
 // 0, if not zero
 inline bool big_integer::is_zero() const
 {
     return ((this->arr.size() == 1) && (this->arr[0] == 0));
 }
 
-//pre:
-// gets *this b_i and a b_i
-//post:
-// returns:
-// 0, if *this == a
-// 1, if *this > a
-// -1, if *this < a
-int8_t big_integer::compare(big_integer const& a) const
+big_integer::compare_result big_integer::compare(big_integer const& a) const
 {
-    if (this->is_zero() && a.is_zero()) return 0;
-    if (this->sign < a.sign) return 1; //0 < 1, 0 is positive
-    if (this->sign > a.sign) return -1;
+    if (this->is_zero() && a.is_zero()) return compare_result::equals;
+    if (this->sign < a.sign) return compare_result::greater; //0 < 1, 0 is positive
+    if (this->sign > a.sign) return compare_result::less;
     if (this->sign == 0) //positive
     {
         return this->compare_by_abs(a);
     }
 
-    if (this->arr.size() > a.arr.size()) return -1;
-    if (this->arr.size() < a.arr.size()) return 1;
+    if (this->arr.size() > a.arr.size()) return compare_result::less;
+    if (this->arr.size() < a.arr.size()) return compare_result::greater;
     for (size_t i = this->arr.size(); i > 0; i--)
     {
         if (this->arr[i - 1] != a.arr[i - 1])
         {
-            if (this->arr[i - 1] > a.arr[i - 1]) return -1;
-            return 1;
+            if (this->arr[i - 1] > a.arr[i - 1]) return compare_result::less;
+            return compare_result::greater;
         }
     }
-    return 0;
+    return compare_result::equals;
 }
 
-// 0, if *this == a
-// 1, if *this > a
-// -1, if *this < a
-int8_t big_integer::compare_by_abs(big_integer const& a) const
+big_integer::compare_result big_integer::compare_by_abs(big_integer const& a) const
 {
-    if (this->arr.size() > a.arr.size()) return 1;
-    if (this->arr.size() < a.arr.size()) return -1;
+    if (this->arr.size() > a.arr.size()) return compare_result::greater;
+    if (this->arr.size() < a.arr.size()) return compare_result::less;
     for (size_t i = this->arr.size(); i > 0; i--)
     {
         if (this->arr[i - 1] != a.arr[i - 1])
         {
-            if (this->arr[i - 1] > a.arr[i - 1]) return 1;
-            return -1;
+            if (this->arr[i - 1] > a.arr[i - 1]) return compare_result::greater;
+            return compare_result::less;
         }
     }
-    return 0;
+    return compare_result::equals;
 }
 
 //removes all leading zeroes, except the only one, if the value of b_i is zero. 
@@ -471,7 +459,7 @@ big_integer& big_integer::recognize_operation(char operand, big_integer const& o
             return this->correct_subtraction(other);
         if (this->sign == 1 && other.sign == 0)
         {
-            if (this->compare_by_abs(other) == 1) //*this > other by abs
+            if (this->compare_by_abs(other) == big_integer::compare_result::greater)
             {
                 this->sub_long_long_unsigned(other);
                 this->sign = 1;
@@ -501,7 +489,7 @@ big_integer& big_integer::recognize_operation(char operand, big_integer const& o
             this->sign = 1;
         } else if (this->sign == 1 && other.sign == 1)
         {
-            if (this->compare_by_abs(other) == 1)
+            if (this->compare_by_abs(other) == big_integer::compare_result::greater)
             {
                 this->sub_long_long_unsigned(other);
                 this->sign = 1;
@@ -530,7 +518,7 @@ big_integer& big_integer::recognize_operation(char operand, big_integer const& o
 
 inline big_integer& big_integer::correct_subtraction(big_integer const& other)
 {
-    if (this->compare_by_abs(other) == 1)
+    if (this->compare_by_abs(other) == big_integer::compare_result::greater)
     {
         this->sub_long_long_unsigned(other);
         this->sign = 0;
@@ -678,14 +666,14 @@ big_integer& big_integer::mul_long_short_unsigned(uint32_t const other)
 
 big_integer& big_integer::div_long_long_unsigned(big_integer const& b)
 {
-    int8_t comparison = b.compare_by_abs(*this);
-    if (comparison == 1) //b is bigger, than *this
+    big_integer::compare_result comparison = b.compare_by_abs(*this);
+    if (comparison == big_integer::compare_result::greater) //b is bigger, than *this
     {
         this->arr.clear();
         this->arr.resize(1);
         this->arr[0] = 0;
         return *this;
-    } else if (comparison == 0) //equal
+    } else if (comparison == big_integer::compare_result::equals) //equal
     {
         this->arr.clear();
         this->arr.resize(1);
@@ -740,7 +728,7 @@ big_integer& big_integer::div_long_long_unsigned(big_integer const& b)
         {
             int64_t m = (l + r) / 2;
             big_integer b_copy(b);
-            if ((b_copy.mul_long_short_unsigned(static_cast<uint32_t>(m))).compare_by_abs(tmp) != 1) //less or equal
+            if ((b_copy.mul_long_short_unsigned(static_cast<uint32_t>(m))).compare_by_abs(tmp) != big_integer::compare_result::greater) //less or equal
                 l = m;
             else
                 r = m;

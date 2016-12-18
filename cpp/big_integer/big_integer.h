@@ -55,6 +55,9 @@ struct big_integer
     friend std::string to_string(big_integer const& a);
 
 private:
+
+    enum compare_result {equals, greater, less};
+
     //member variables:
     optimized_vector arr;
 
@@ -64,8 +67,8 @@ private:
 
     //functions:
     inline bool is_zero() const;
-    int8_t compare(big_integer const& a) const;
-    int8_t compare_by_abs(big_integer const& a) const;
+    compare_result compare(big_integer const& a) const;
+    compare_result compare_by_abs(big_integer const& a) const;
     big_integer& recognize_operation(char operand, big_integer const& other);
     inline big_integer& correct_subtraction(big_integer const& other);
     inline void erase_leading_zeroes();

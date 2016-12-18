@@ -6,7 +6,6 @@
 #define OPTIMIZED_VECTOR_H
 
 #include <vector>
-#include <iosfwd>
 #include <cstdint>
 #include <memory>
 
