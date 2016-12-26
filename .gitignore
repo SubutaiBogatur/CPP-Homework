@@ -1,0 +1,10 @@
+#Binaries and cmake files and idea files
+cpp/big_integer/.idea/
+cpp/big_integer/build/
+cpp/big_integer/main.cpp
+
+cpp/bind/.idea/
+cpp/bind/build/
+
+cpp/lru_cache/.idea/
+cpp/lru_cache/build/
