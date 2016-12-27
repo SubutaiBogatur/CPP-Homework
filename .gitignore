@@ -5,6 +5,9 @@ cpp/big_integer/main.cpp
 
 cpp/bind/.idea/
 cpp/bind/build/
+cpp/bind/CMakeLists.txt
+cpp/bind/out
 
 cpp/lru_cache/.idea/
 cpp/lru_cache/build/
+cpp/lru_cache/CMakeLists.txt
