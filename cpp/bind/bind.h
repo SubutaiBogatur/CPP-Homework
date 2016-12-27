@@ -59,7 +59,7 @@ private:
 
     //usual value
     template<typename Old_Arg, typename... New_Args>
-    auto&& arg_get(Old_Arg&& old_arg, New_Args&& ...) const
+    Old_Arg&& arg_get(Old_Arg&& old_arg, New_Args&& ...) const
     {
         return old_arg;
     }
