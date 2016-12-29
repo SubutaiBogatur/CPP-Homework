@@ -103,11 +103,7 @@ uint32_t& optimized_vector::operator[](size_t position)
 
 void optimized_vector::push_back(const uint32_t& value)
 {
-    if (is_small && number == 0) //remains small
-    {
-        number = value;
-        return;
-    } else if (is_small) //is_small, but must become large
+    if (is_small) //is_small, but must become large
     {
         is_small = false;
         uint32_t tmp = number;
