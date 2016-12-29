@@ -145,10 +145,14 @@ either<Left,Right>::either(either<Left,Right> const& other)
 template<typename Left, typename Right>
 either<Left, Right>::either(either<Left, Right>&& other)
 {
-    if (other.is_left())
+    if (other.is_left()) {
+        which = LEFT;
         emplace(emplace_left, other.left());
-    else
+    }
+    else {
+        which = RIGHT;
         emplace(emplace_right, other.right());
+    }
 }
 
 template<typename Left, typename Right>
