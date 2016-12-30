@@ -22,6 +22,13 @@ TEST(correctness, default_ctor)
     EXPECT_EQ(a, b);
 }
 
+TEST(correctness, ctor_limits)
+{
+    big_integer a = std::numeric_limits<int>::min();
+    big_integer b = std::numeric_limits<int>::max();
+    EXPECT_EQ(a + b, -1);
+}
+
 TEST(correctness, copy_ctor)
 {
     big_integer a = 3;
@@ -212,6 +219,21 @@ TEST(correctness, div_)
     EXPECT_TRUE(c == 0);
 }
 
+TEST(correctness, div_int_min)
+{
+    big_integer a = std::numeric_limits<int>::min();
+    EXPECT_TRUE((a / a) == (a / std::numeric_limits<int>::min()));
+}
+
+TEST(correctness, div_int_min_2)
+{
+    big_integer a = std::numeric_limits<int>::min();
+    big_integer b = -1;
+    big_integer c = a / b;
+    EXPECT_TRUE(c == (a / -1));
+    EXPECT_TRUE((c - std::numeric_limits<int>::max()) == 1);
+}
+
 TEST(correctness, div_signed)
 {
     big_integer a = -20;
@@ -259,8 +281,8 @@ TEST(correctness, unary_plus)
 
     EXPECT_TRUE(a == b);
 
-// this code should not compile:
-// &+a;
+    // this code should not compile:
+    // &+a;
 }
 
 TEST(correctness, negation)
@@ -383,6 +405,13 @@ TEST(correctness, shr_)
 
     a >>= 2;
     EXPECT_EQ(a, 5);
+}
+
+TEST(correctness, shr_31)
+{
+    big_integer a = 65536;
+
+    EXPECT_EQ((a * a) >> 31, 2);
 }
 
 TEST(correctness, shr_signed)
@@ -536,8 +565,8 @@ TEST(correctness, string_conv)
 
 namespace
 {
-    unsigned const number_of_iterations = 10; //default 10
-    size_t const number_of_multipliers = 1000; //default 1000
+    unsigned const number_of_iterations = 10;
+    size_t const number_of_multipliers = 1000;
 
     int myrand()
     {

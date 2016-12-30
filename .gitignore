@@ -11,3 +11,9 @@ cpp/bind/out
 cpp/lru_cache/.idea/
 cpp/lru_cache/build/
 cpp/lru_cache/CMakeLists.txt
+
+cpp/either/.idea/
+cpp/either/build/
+cpp/either/CMakeLists.txt
+cpp/either/out
+cpp/either/a.out
