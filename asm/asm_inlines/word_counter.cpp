@@ -22,7 +22,7 @@ void print128_num_by_bytes(__m128i var)
     printf("\n");
 }
  
-int count_words(char *arr, size_t size)
+void count_words(char *arr, size_t size)
 {
     __m128i space_mask_reg = _mm_set_epi8(32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32);
     __m128i shifted_mask_reg = _mm_set_epi8(255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -49,11 +49,19 @@ int count_words(char *arr, size_t size)
         cur_position++;
     }
 
+    //some crutches
+    if ((is_whitespace && *(arr + cur_position) != ' ' && cur_position != 0)
+                  || (cur_position == 0 && *arr != ' ')) ans++;
+    if(cur_position != 0 && *arr != ' ') ans++;
+    //
+
     std::cerr << "\nNow is aligned, string left: " << std::endl;
     std::cerr << cur_position + arr;
     std::cerr << std::endl << std::endl;
 
     //main part, using vectorization, every step is 16 bytes
+    __m128i store; //variable is used to store bytes got in for loop
+    store = _mm_set_epi32(0, 0, 0, 0);
     for(size_t i = cur_position; i < size - cur_position - (size - cur_position) % 16; i += 16) //while i < new size floor 16
     {
         __m128i trasher;
@@ -68,14 +76,14 @@ int count_words(char *arr, size_t size)
         __asm__("movdqa\t" "(%1), %0"
                 :"=x"(part_of_string)
                 :"r"(arr + i));
-        print128_num_by_bytes(part_of_string);
+        //print128_num_by_bytes(part_of_string);
 
         __m128i cmp_result;
         //compare part of string with space mask
         __asm__("pcmpeqb\t" "%1, %0"
                 :"=x"(cmp_result), "=x"(trasher)
                 :"1"(part_of_string), "0"(space_mask_reg));
-        print128_num_by_bytes(cmp_result); 
+        //print128_num_by_bytes(cmp_result); 
 
         //shift right???? by one
         __m128i cmp_result_sll_with_zero;
@@ -87,7 +95,7 @@ int count_words(char *arr, size_t size)
         __asm__("por\t" "%1, %0"
                 :"=x"(cmp_result_shifted), "=x"(trasher)
                 :"0"(cmp_result_sll_with_zero), "1"(shifted_mask_reg));
-        print128_num_by_bytes(cmp_result_shifted);
+        //print128_num_by_bytes(cmp_result_shifted);
 
         __m128i result; //on our byte there is space,
         //  but in right neigbour there is no space
@@ -95,8 +103,36 @@ int count_words(char *arr, size_t size)
         __asm__("pandn\t" "%1, %0"
                 :"=x"(result), "=x"(trasher) //part of str is read not to get the same regs
                 :"1"(cmp_result), "0"(cmp_result_shifted));
-        print128_num_by_bytes(result);
+        //print128_num_by_bytes(result);
 
+        __asm__("psubsb\t" "%1, %0"
+                :"=x"(store), "=x"(trasher)
+                :"1"(result), "0"(store));
+        print128_num_by_bytes(store);
+
+        uint32_t moskva;
+        __asm__("pmovmskb\t" "%1, %0"
+            :"=r"(moskva), "=x"(trasher)
+            :"x"(store), "0"(moskva));
+
+        if(moskva != 0) //if at least one byte in store is more than 128
+        {
+            //sum all bytes in store and then refresh it
+            __m128i result_of_abs;
+            __m128i zero;
+            zero = _mm_set_epi32(0, 0, 0, 0);
+            __asm__("psadbw\t" "%1, %0"
+                    :"=x"(result_of_abs), "=x"(trasher)
+                    :"0"(zero), "1"(store));
+            print128_num_by_bytes(result_of_abs);
+
+            //how to
+            //now we want to get sum of upper and lower quadwords:  
+            /*__m128i lower;
+            __asm__("pextrq\t" "%1, %0, $0"
+                    :"=x"(lower)
+                    :"x"(result_of_abs));*/
+        }
 
     }
 
@@ -114,7 +150,7 @@ int count_words(char *arr, size_t size)
 int main()
 {
         char* str = (char*)"abc bbbbbb bbbbb bbbbbbbbbbbbbbbbb";
-        char* str_strange = (char*)"wwwwwww        wwwwwwwwwww ww www        www w wwwwwwww"; //why segfault????
+        char* str_strange = (char*)"wwwwwww        wwwwwwwwwww ww www        www w wwwwwwwwwww        www w wwwwwww        www w wwwwwwww        www w wwwwwww        www w wwww"; //why segfault????
         char* str_strange1 = (char*)"aaaaaaaaaa _aaaaaaaaaaaaaaaaaaaa";
 
 
@@ -123,6 +159,6 @@ int main()
 
 
         //count_words(str_strange, 16);
-        count_words(str_strange, 55);
+        count_words(str_strange, 140);
         return 0;
 }

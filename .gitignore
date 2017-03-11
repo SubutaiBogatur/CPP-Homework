@@ -17,3 +17,6 @@ cpp/either/build/
 cpp/either/CMakeLists.txt
 cpp/either/out
 cpp/either/a.out
+
+*.s 
+*.out
