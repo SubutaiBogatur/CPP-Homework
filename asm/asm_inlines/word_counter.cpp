@@ -2,24 +2,25 @@
 #include <emmintrin.h>
 #include <stdio.h>
 #include <iostream>
+#include <string>
 
-void print128_num_by_words(__m128i var)
-{
-    uint16_t *val = (uint16_t*) &var;
-    printf("Value in words: %i %i %i %i %i %i %i %i \n", 
-           val[0], val[1], val[2], val[3], val[4], val[5], 
-           val[6], val[7]);
-}
+bool logging_is_enabled = true;
 
-void print128_num_by_bytes(__m128i var)
+#define LOG(x) do { \
+  if (logging_is_enabled) { std::cerr << x; } \
+} while (0)
+
+std::string to_string_by_bytes(__m128i var)
 {
+    std::string ret;
+    ret += " in bytes: ";
+
     char *val = (char *) &var;
-    printf("Value in bytes: ");
     for(size_t i = 0; i < 16; i++)
     {
-        printf("%d ", (int)*(val + i));
+        ret += std::to_string((int)*(val + i)) + " ";
     }
-    printf("\n");
+    return ret;
 }
  
 void count_words(char *arr, size_t size)
@@ -32,12 +33,13 @@ void count_words(char *arr, size_t size)
     size_t cur_position = 0;
     size_t ans = 0;
 
-    //todo why can't we make alignment by 8?????
+    LOG("\nString given:\n" + std::string(arr) + "\n\n");
+
     //making data aligned to use vectorization
     bool is_whitespace = false;
     while ((size_t) (arr + cur_position) % 16 != 0 && cur_position < size)
     {
-        std::cerr << "have to move more " << 16 - (size_t) (arr + cur_position) % 16 << std::endl;
+        LOG("have to move more "  + std::to_string(16 - (size_t) (arr + cur_position) % 16) + "\n");
 
         char cur_symbol = *(arr + cur_position);
         if(is_whitespace && cur_symbol != ' ')
@@ -55,35 +57,27 @@ void count_words(char *arr, size_t size)
     if(cur_position != 0 && *arr != ' ') ans++;
     //
 
-    std::cerr << "\nNow is aligned, string left: " << std::endl;
-    std::cerr << cur_position + arr;
-    std::cerr << std::endl << std::endl;
+    LOG("\nNow is aligned, string left:\n" + std::string(cur_position + arr) + "\n\n");
 
     //main part, using vectorization, every step is 16 bytes
-    __m128i store; //variable is used to store bytes got in for loop
+    __m128i store; //variable is used to store bytes got in `for` loop
     store = _mm_set_epi32(0, 0, 0, 0);
     for(size_t i = cur_position; i < size - cur_position - (size - cur_position) % 16; i += 16) //while i < new size floor 16
     {
-        __m128i trasher;
-        //compare value in mask register with 16
-        //      bytes of given string, which is
-        //      in memory and write result
-        //      to cmp_result. Comparing by
-        //      bytes!!                
+        __m128i trasher; //todo delete later         
         //here we write many asm inlines for debugging, later unite in one
+
         __m128i part_of_string;
         //mov part of string to register
         __asm__("movdqa\t" "(%1), %0"
                 :"=x"(part_of_string)
                 :"r"(arr + i));
-        //print128_num_by_bytes(part_of_string);
 
         __m128i cmp_result;
         //compare part of string with space mask
         __asm__("pcmpeqb\t" "%1, %0"
                 :"=x"(cmp_result), "=x"(trasher)
                 :"1"(part_of_string), "0"(space_mask_reg));
-        //print128_num_by_bytes(cmp_result); 
 
         //shift right???? by one
         __m128i cmp_result_sll_with_zero;
@@ -95,36 +89,34 @@ void count_words(char *arr, size_t size)
         __asm__("por\t" "%1, %0"
                 :"=x"(cmp_result_shifted), "=x"(trasher)
                 :"0"(cmp_result_sll_with_zero), "1"(shifted_mask_reg));
-        //print128_num_by_bytes(cmp_result_shifted);
 
-        __m128i result; //on our byte there is space,
-        //  but in right neigbour there is no space
-        //do result = not cmp_res_shifted and cmp_res
+        __m128i result; //in our byte there is space,
+        //  but in right neigbour there is no space (ie 1 if space before start of word)
+        //result = not cmp_res_shifted and cmp_res
         __asm__("pandn\t" "%1, %0"
-                :"=x"(result), "=x"(trasher) //part of str is read not to get the same regs
+                :"=x"(result), "=x"(trasher) 
                 :"1"(cmp_result), "0"(cmp_result_shifted));
-        //print128_num_by_bytes(result);
+        LOG("Result" + to_string_by_bytes(result) + "\n");
 
         __asm__("psubsb\t" "%1, %0"
                 :"=x"(store), "=x"(trasher)
                 :"1"(result), "0"(store));
-        print128_num_by_bytes(store);
+        LOG("Store " + to_string_by_bytes(store) + "\n");
 
-        uint32_t moskva;
+        uint32_t msk;
         __asm__("pmovmskb\t" "%1, %0"
-            :"=r"(moskva), "=x"(trasher)
-            :"x"(store), "0"(moskva));
+            :"=r"(msk), "=x"(trasher)
+            :"x"(store), "0"(msk));
 
-        if(moskva != 0) //if at least one byte in store is more than 128
+        if(msk != 0) //if at least one byte in store is more than 128
         {
             //sum all bytes in store and then refresh it
             __m128i result_of_abs;
-            __m128i zero;
-            zero = _mm_set_epi32(0, 0, 0, 0);
+            __m128i zero = _mm_set_epi32(0, 0, 0, 0);
             __asm__("psadbw\t" "%1, %0"
                     :"=x"(result_of_abs), "=x"(trasher)
                     :"0"(zero), "1"(store));
-            print128_num_by_bytes(result_of_abs);
+            //print128_num_by_bytes(result_of_abs);
 
             //how to
             //now we want to get sum of upper and lower quadwords:  
@@ -136,7 +128,8 @@ void count_words(char *arr, size_t size)
 
     }
 
-    std::cerr << "\nVectorization is over, doing the last part\n\n";
+    std::cerr << "\nVectorization is over, doing the last part, string left:\n";
+    std::cerr << arr + size - cur_position - (size - cur_position) % 16 << std::endl << std::endl;
 
     //do the last third part
     //while ((size - cur_position) % 16 != 0)
