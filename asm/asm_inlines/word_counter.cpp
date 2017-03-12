@@ -85,6 +85,8 @@ void count_words(char *arr, size_t size)
                 :"=x"(cmp_result_sll_with_zero)
                 :"0"(cmp_result));
 
+        //todo take byte from next vectorization here!!
+
         __m128i cmp_result_shifted;
         __asm__("por\t" "%1, %0"
                 :"=x"(cmp_result_shifted), "=x"(trasher)
@@ -96,14 +98,14 @@ void count_words(char *arr, size_t size)
         __asm__("pandn\t" "%1, %0"
                 :"=x"(result), "=x"(trasher) 
                 :"1"(cmp_result), "0"(cmp_result_shifted));
-
-        //result = _mm_set_epi8(50, 20, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        LOG("Result" + to_string_by_bytes(result, true) + "\n");
+        //result = _mm_set_epi8(-50, -20, -20, 0, 0, 0, 0, 0, -80, -30, 0, 0, 0, 0, 0, 0);
+        //LOG("Result" + to_string_by_bytes(result, true) + "\n");
 
         __m128i positive_result; //just all -1 become 1 to use unsigned saturation addition later
         __asm__("psubsb\t" "%1, %0"
                 :"=x"(positive_result), "=x"(trasher)
                 :"0"(_mm_set_epi32(0, 0, 0, 0)), "1"(result));
+
         LOG("Positi" + to_string_by_bytes(positive_result, true) + "\n");
 
         __asm__("paddusb\t" "%1, %0"
@@ -117,36 +119,56 @@ void count_words(char *arr, size_t size)
             :"x"(store), "0"(msk));
         LOG("Moscow " + std::to_string(msk) + "\n");
 
-        if(msk != 0) //if at least one byte in store is more than 128
+        if(msk != 0) //if at least one byte in store is more than 127
         {
             //sum all bytes in store and then refresh it
             __m128i result_of_abs;
-            __m128i zero = _mm_set_epi32(0, 0, 0, 0);
             __asm__("psadbw\t" "%1, %0"
                     :"=x"(result_of_abs), "=x"(trasher)
-                    :"0"(zero), "1"(store));
-            std::cerr << "inside";
+                    :"0"(_mm_set_epi32(0, 0, 0, 0)), "1"(store));
+            LOG("Abs   " + to_string_by_bytes(result_of_abs, false) + "\n");
 
-            //how to
-            //now we want to get sum of upper and lower quadwords:  
-            /*__m128i lower;
-            __asm__("pextrq\t" "%1, %0, $0"
-                    :"=x"(lower)
-                    :"x"(result_of_abs));*/
+            //here we move lowest 32 bits (ie d) of abs to low.
+            //  32 bits is enough, because max value of low can be:
+            //  128 * 8 < 2 ^ 32
+            uint32_t low;
+            __asm__("movd\t" "%1, %0"
+                    :"=r"(low)
+                    :"x"(result_of_abs));
+            LOG("low    " + std::to_string(low) + "\n");
+
+            uint32_t high;
+            __m128i abs_low;
+            __asm__("movhlps\t" "%1, %0"
+                    :"=x"(abs_low), "=x"(trasher)
+                    :"1"(result_of_abs));
+            LOG("LAbs  " + to_string_by_bytes(abs_low, false) + "\n");
+
+            __asm__("movd\t" "%1, %0"
+                    :"=r"(high)
+                    :"x"(abs_low));
+            LOG("high   " + std::to_string(high) + "\n");
+
+            ans += high + low;
+            store = _mm_set_epi32(0, 0, 0, 0);
         }
 
+        LOG("\n");
+
     }
 
-    std::cerr << "\nVectorization is over, doing the last part, string left:\n";
-    std::cerr << arr + size - cur_position - (size - cur_position) % 16 << std::endl << std::endl;
+    LOG("\nVectorization is over, doing the last part, string left:\n");
+    LOG(std::string(arr + size - cur_position - (size - cur_position) % 16) + "\n\n");
 
-    //do the last third part
-    //while ((size - cur_position) % 16 != 0)
+    is_whitespace = *(arr + size - cur_position - (size - cur_position) % 16 - 1) == ' ';
+    for(size_t i = size - cur_position - (size - cur_position) % 16; i < size; i++)
     {
-
+        if (*(arr + i) != ' ' && is_whitespace) ans++;
+        is_whitespace = *(arr + i) == ' ';
+        LOG(std::to_string(size - i) + " chars left\n");
     }
 
-    std::cerr << "then ans is: " << ans << std::endl;
+    LOG("\nthen ans is: " + std::to_string(ans) + "\n");
 } 
 
 int main()
