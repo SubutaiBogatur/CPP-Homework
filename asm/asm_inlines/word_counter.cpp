@@ -10,7 +10,7 @@ bool logging_is_enabled = true;
   if (logging_is_enabled) { std::cerr << x; } \
 } while (0)
 
-std::string to_string_by_bytes(__m128i var)
+std::string to_string_by_bytes(__m128i var, bool is_signed = false)
 {
     std::string ret;
     ret += " in bytes: ";
@@ -18,7 +18,7 @@ std::string to_string_by_bytes(__m128i var)
     char *val = (char *) &var;
     for(size_t i = 0; i < 16; i++)
     {
-        ret += std::to_string((int)*(val + i)) + " ";
+        ret += std::to_string((is_signed ? (int)*(val + i) : (uint8_t)*(val + i))) + " ";
     }
     return ret;
 }
@@ -96,17 +96,26 @@ void count_words(char *arr, size_t size)
         __asm__("pandn\t" "%1, %0"
                 :"=x"(result), "=x"(trasher) 
                 :"1"(cmp_result), "0"(cmp_result_shifted));
-        LOG("Result" + to_string_by_bytes(result) + "\n");
 
+        //result = _mm_set_epi8(50, 20, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        LOG("Result" + to_string_by_bytes(result, true) + "\n");
+
+        __m128i positive_result; //just all -1 become 1 to use unsigned saturation addition later
         __asm__("psubsb\t" "%1, %0"
+                :"=x"(positive_result), "=x"(trasher)
+                :"0"(_mm_set_epi32(0, 0, 0, 0)), "1"(result));
+        LOG("Positi" + to_string_by_bytes(positive_result, true) + "\n");
+
+        __asm__("paddusb\t" "%1, %0"
                 :"=x"(store), "=x"(trasher)
-                :"1"(result), "0"(store));
-        LOG("Store " + to_string_by_bytes(store) + "\n");
+                :"1"(positive_result), "0"(store));
+        LOG("Store " + to_string_by_bytes(store, false) + "\n");
 
         uint32_t msk;
         __asm__("pmovmskb\t" "%1, %0"
             :"=r"(msk), "=x"(trasher)
             :"x"(store), "0"(msk));
+        LOG("Moscow " + std::to_string(msk) + "\n");
 
         if(msk != 0) //if at least one byte in store is more than 128
         {
@@ -116,7 +125,7 @@ void count_words(char *arr, size_t size)
             __asm__("psadbw\t" "%1, %0"
                     :"=x"(result_of_abs), "=x"(trasher)
                     :"0"(zero), "1"(store));
-            //print128_num_by_bytes(result_of_abs);
+            std::cerr << "inside";
 
             //how to
             //now we want to get sum of upper and lower quadwords:  
