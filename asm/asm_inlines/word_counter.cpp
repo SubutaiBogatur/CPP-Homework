@@ -1,8 +1,15 @@
+//
+// Created by Aleksandr Tukallo on 11.03.17.
+//
+
 #include <cstdint>
 #include <emmintrin.h>
 #include <stdio.h>
 #include <iostream>
 #include <string>
+#include <cstdlib>
+#include <ctime>
+#include "test_utils/test_utils.h"
 
 bool logging_is_enabled = true;
 
@@ -23,7 +30,7 @@ std::string to_string_by_bytes(__m128i var, bool is_signed = false)
     return ret;
 }
  
-void count_words(char *arr, size_t size)
+uint32_t count_words(char const *arr, size_t size)
 {
     __m128i space_mask_reg = _mm_set_epi8(32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32);
     __m128i shifted_mask_reg = _mm_set_epi8(255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -57,12 +64,13 @@ void count_words(char *arr, size_t size)
     if(cur_position != 0 && *arr != ' ') ans++;
     //
 
-    LOG("\nNow is aligned, string left:\n" + std::string(cur_position + arr) + "\n\n");
+    LOG("\nNow is aligned, ans: " + std::to_string(ans) +  " string left:\n" + std::string(cur_position + arr) + "\n\n");
 
     //main part, using vectorization, every step is 16 bytes
     __m128i store; //variable is used to store bytes got in `for` loop
     store = _mm_set_epi32(0, 0, 0, 0);
-    for(size_t i = cur_position; i < size - cur_position - (size - cur_position) % 16; i += 16) //while i < new size floor 16
+    size_t end_of_vectorization = size - (size - cur_position) % 16;
+    for(size_t i = cur_position; i < end_of_vectorization; i += 16) //while i < new size floor 16
     {
         __m128i trasher; //todo delete later         
         //here we write many asm inlines for debugging, later unite in one
@@ -119,7 +127,9 @@ void count_words(char *arr, size_t size)
             :"x"(store), "0"(msk));
         LOG("Moscow " + std::to_string(msk) + "\n");
 
-        if(msk != 0) //if at least one byte in store is more than 127
+        //if at least one byte in store is more than 127
+        //  or if it is last iteration of loop
+        if(msk != 0 || i + 16 >= end_of_vectorization) 
         {
             //sum all bytes in store and then refresh it
             __m128i result_of_abs;
@@ -156,12 +166,13 @@ void count_words(char *arr, size_t size)
         LOG("\n");
 
     }
+    cur_position = end_of_vectorization;
 
-    LOG("\nVectorization is over, doing the last part, string left:\n");
-    LOG(std::string(arr + size - cur_position - (size - cur_position) % 16) + "\n\n");
+    LOG("\nVectorization is over, ans now: " + std::to_string(ans) + " doing the last part, string left:\n");
+    LOG(std::string(arr + cur_position) + "\n\n");
 
-    is_whitespace = *(arr + size - cur_position - (size - cur_position) % 16 - 1) == ' ';
-    for(size_t i = size - cur_position - (size - cur_position) % 16; i < size; i++)
+    is_whitespace = *(arr + cur_position - 1) == ' ';
+    for(size_t i = cur_position; i < size; i++)
     {
         if (*(arr + i) != ' ' && is_whitespace) ans++;
         is_whitespace = *(arr + i) == ' ';
@@ -169,20 +180,35 @@ void count_words(char *arr, size_t size)
     }
 
     LOG("\nthen ans is: " + std::to_string(ans) + "\n");
+    return ans;
 } 
+
+void do_tests(size_t num = 50)
+{
+    std::srand(std::time(0));
+    std::cout << std::time(0) << std::endl;
+    for(size_t i = 0; i < num; i++)
+    {
+        std::string str = get_random_string();
+        std::cerr << "New string:\n" << str << std::endl << std::endl;
+        uint32_t fast_ans = count_words(str.c_str(), str.size());
+        uint32_t slow_ans = count_words_slowly(str);
+
+        std::cerr << "Slow ans: " << slow_ans << ", fast ans: " << fast_ans << std::endl; 
+        if(slow_ans != fast_ans)
+        {
+            std::cin >> str;
+        }
+    }
+}
 
 int main()
 {
         char* str = (char*)"abc bbbbbb bbbbb bbbbbbbbbbbbbbbbb";
-        char* str_strange = (char*)"wwwwwww        wwwwwwwwwww ww www        www w wwwwwwwwwww        www w wwwwwww        www w wwwwwwww        www w wwwwwww        www w wwww"; //why segfault????
+        char* str_strange = (char*)"wwwwwww        wwwwwwwwwww ww www        www w wwwww";
         char* str_strange1 = (char*)"aaaaaaaaaa _aaaaaaaaaaaaaaaaaaaa";
 
+        do_tests();
 
-        //std::cout << (((size_t) str) % 16 == 0) << std::endl;
-        //very very cool
-
-
-        //count_words(str_strange, 16);
-        count_words(str_strange, 140);
         return 0;
 }
