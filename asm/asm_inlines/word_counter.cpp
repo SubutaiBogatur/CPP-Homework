@@ -9,6 +9,7 @@
 #include <string>
 #include <cstdlib>
 #include <ctime>
+#include <fstream>
 #include "test_utils/test_utils.h"
 
 bool logging_is_enabled = true;
@@ -35,10 +36,13 @@ uint32_t count_words(std::string const& str)
     char const *arr = str.c_str();
     size_t size = str.size();
 
-    __m128i space_mask_reg = _mm_set_epi8(32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32);
-    __m128i shifted_mask_reg = _mm_set_epi8(255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    //not to put a lot of crutches when checking size all the time
+    if(size <= 64)
+    {
+        return count_words_slowly(str);
+    }
 
-    //////////////////////////////////////////////
+    __m128i space_mask_reg = _mm_set_epi8(32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32);
 
     size_t cur_position = 0;
     size_t ans = 0;
@@ -47,7 +51,7 @@ uint32_t count_words(std::string const& str)
 
     //making data aligned to use vectorization
     bool is_whitespace = false;
-    while ((size_t) (arr + cur_position) % 16 != 0 && cur_position < size)
+    while ((size_t) (arr + cur_position) % 16 != 0)
     {
         LOG("have to move more "  + std::to_string(16 - (size_t) (arr + cur_position) % 16) + "\n");
 
@@ -75,87 +79,53 @@ uint32_t count_words(std::string const& str)
     __m128i cur_cmp, next_cmp; //variables store current 16 bytes and next 16 bytes respectively after comparing them with space mask
     __m128i trasher; //todo delete later  
 
-    size_t end_of_vectorization = size - (size - cur_position) % 16;
-    //if more than two steps are made
-    if(end_of_vectorization - cur_position >= 32)
-    {
-        //get second 16 bytes of string from memory and compare them with space mask
-        __asm__("movdqa\t" "(%2), %1\n"
-                "pcmpeqb\t" "%1, %0"
-                :"=x"(next_cmp), "=x"(trasher)
-                :"r"(arr + cur_position), "0"(space_mask_reg));
-    }
+    //vectorization is done on indexes: [cur_position; (size - cur_position) % 16 - 16]
+    size_t end_of_vectorization = size - (size - cur_position) % 16 - 16;
+    
+    //there is always current and next, because of size check
+    //get first 16 bytes of string from memory and compare them with space mask
+    __asm__("movdqa\t" "(%2), %1\n"
+            "pcmpeqb\t" "%1, %0"
+            :"=x"(next_cmp), "=x"(trasher)
+            :"r"(arr + cur_position), "0"(space_mask_reg));
+    
 
-    for(size_t i = cur_position; i < end_of_vectorization - 16; i += 16) //while i < new size (floor 16) - 16 (- 16 because, always reading next bytes)
+    for(size_t i = cur_position; i < end_of_vectorization; i += 16) //while i < new size (floor 16) - 16 (- 16 because, always reading next bytes)
     {
         //here we write many asm inlines for debugging, later unite in one
 
-        __m128i next_part;
         cur_cmp = next_cmp;
-        //mov part of string to register
-        __asm__("movdqa\t" "(%1), %0"
-                :"=x"(next_part)
-                :"r"(arr + i + 16));
 
-        //compare part of string with space mask
-        __asm__("pcmpeqb\t" "%1, %0"
+        //get cmp for next part of string
+        __asm__("movdqa\t" "(%2), %1\n"
+                "pcmpeqb\t" "%1, %0"
                 :"=x"(next_cmp), "=x"(trasher)
-                :"1"(next_part), "0"(space_mask_reg));
+                :"r"(arr + i + 16), "0"(space_mask_reg));
 
         LOG("Curcmp" + to_string_by_bytes(cur_cmp) + "\n");
         LOG("Nexcmp" + to_string_by_bytes(next_cmp) + "\n");
 
-        __m128i cmp_result = cur_cmp;
-
-        //shift right???? by one
-        __m128i cmp_result_sll_with_zero;
-        __asm__("psrldq\t" "$1, %0"
-                :"=x"(cmp_result_sll_with_zero)
-                :"0"(cmp_result));
-
-        //todo take byte from next vectorization here!!
-
         __m128i cmp_result_shifted;
-        __asm__("por\t" "%1, %0"
+        __asm__("palignr\t" "$1, %1, %0"
                 :"=x"(cmp_result_shifted), "=x"(trasher)
-                :"0"(cmp_result_sll_with_zero), "1"(shifted_mask_reg));
+                :"0"(next_cmp), "1"(cur_cmp));
+        LOG("Shifte" + to_string_by_bytes(cmp_result_shifted) + "\n");
 
-        __m128i result; //in our byte there is space,
+        //in our byte there is space,
         //  but in right neigbour there is no space (ie 1 if space before start of word)
         //result = not cmp_res_shifted and cmp_res
+        //this result is summed and stored in store
 
         uint32_t msk;
 
-        /*__asm__("pandn\t" "%3, %2\n"
+       __asm__("pandn\t" "%3, %2\n"
                 "psubsb\t" "%2, %4\n"
                 "paddusb\t" "%4, %0\n"
                 "pmovmskb\t" "%0, %1" 
                 :"=x"(store), "=r"(msk) 
-                :"x"(cmp_result_shifted), "x"(cmp_result), "x"(_mm_set_epi32(0, 0, 0, 0)), "0"(store)
-                :"2", "4");*/
-
-        __asm__("pandn\t" "%1, %0"
-                :"=x"(result), "=x"(trasher) 
-                :"1"(cmp_result), "0"(cmp_result_shifted));
-        //result = _mm_set_epi8(-50, -20, -20, 0, 0, 0, 0, 0, -80, -30, 0, 0, 0, 0, 0, 0);
-        //LOG("Result" + to_string_by_bytes(result, true) + "\n");
-
-        __m128i positive_result; //just all -1 become 1 to use unsigned saturation addition later
-        __asm__("psubsb\t" "%1, %0"
-                :"=x"(positive_result), "=x"(trasher)
-                :"0"(_mm_set_epi32(0, 0, 0, 0)), "1"(result));
-
-        LOG("Positi" + to_string_by_bytes(positive_result, true) + "\n");
-
-        __asm__("paddusb\t" "%1, %0"
-                :"=x"(store), "=x"(trasher)
-                :"1"(positive_result), "0"(store));
-        LOG("Store " + to_string_by_bytes(store, false) + "\n");
-
-        __asm__("pmovmskb\t" "%1, %0"
-            :"=r"(msk), "=x"(trasher)
-            :"x"(store), "0"(msk));
-        LOG("Moscow " + std::to_string(msk) + "\n");
+                :"x"(cmp_result_shifted), "x"(cur_cmp), "x"(_mm_set_epi32(0, 0, 0, 0)), "0"(store)
+                :"2", "4");
+       LOG("Store " + to_string_by_bytes(store) + "\n");
 
         //if at least one byte in store is more than 127
         //  or if it is last iteration of loop
@@ -201,6 +171,13 @@ uint32_t count_words(std::string const& str)
     LOG("\nVectorization is over, ans now: " + std::to_string(ans) + " doing the last part, string left:\n");
     LOG(std::string(arr + cur_position) + "\n\n");
 
+    //some more crutches
+    if(*(arr + cur_position - 1) == ' '
+        && *(arr + cur_position) != ' ')
+    {
+        ans--;
+    }
+
     is_whitespace = *(arr + cur_position - 1) == ' ';
     for(size_t i = cur_position; i < size; i++)
     {
@@ -213,13 +190,13 @@ uint32_t count_words(std::string const& str)
     return ans;
 } 
 
-void do_tests(size_t num = 50)
+void do_tests(size_t num = 50000)
 {
     std::srand(std::time(0));
     std::cout << std::time(0) << std::endl;
     for(size_t i = 0; i < num; i++)
     {
-        std::string str = get_random_string(5, 50, 2);
+        std::string str = get_random_string(65, 7000, 2);
         std::cerr << "New string:\n" << str << std::endl << std::endl;
         uint32_t fast_ans = count_words(str);
         uint32_t slow_ans = count_words_slowly(str);
@@ -232,13 +209,33 @@ void do_tests(size_t num = 50)
     }
 }
 
+void generate_large_input()
+{
+    std::ofstream ofs("test_utils/input_data.in");
+    ofs << get_random_string(1e9, 2e9);
+}
+
+void measure_time(bool is_fast = true, uint32_t times = 10)
+{
+    std::ifstream ifs("test_utils/input_data.in");
+    std::string s;
+    std::getline(ifs, s);
+
+    std::time_t start = clock();
+    for(size_t i = 0; i < times; i++) 
+    {
+        is_fast ? count_words(s) : count_words_slowly(s);
+    }
+    std::cout << (clock() - start)/CLOCKS_PER_SEC << " seconds used\n";
+}
+
 int main()
 {
-        std::string str("abc bbbbbb bbbbb bbbbbbbbbbbbbbbbb");
+        std::string str("abc bbbbbb bbbbb bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbb");
         std::string str_strange("wwwwwww        wwwwwwwwwww ww www        www w wwwww     ww ww www        www w wwwww");
         std::string str_strange1("aaaaaaaaaa _aaaaaaaaaaaaaaaaaaaa");
 
-        count_words(str_strange);
+        do_tests();
 
         return 0;
 }
