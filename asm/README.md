@@ -1,0 +1,5 @@
+# Projects and homeworks for C++ course in ITMO University
+
+Asm inlines directory has code written in C++ with assembler inlines. Interesting function there is `count_words`. It gets `std::string` as an input and counts number of separate words in a given string. The function uses assembler inlines to improve perfomance a lot. **%xmm** registers from **MMX** extension are used widely there to get all the benefits of vectorization. String is firstly aligned, then it is read by blocks of *16* bytes and such blocks are compared and processed using instructions for working with packed data from **SSE2** instruction set. As a result, when comparing to usual naive implementation of `count_words` function, where reading is done *byte-by-byte*, we get from *20* to *40 times* speed up in all the tests!!
+
+Pure asm directory contains code just in assembler. The files there are `add.asm`, `multiply.asm` and `subtract.asm`, that implement functions for long arithmetics. Code is rather simple and not really well optimized, task was done when listening to introduction to assembler just to get acquainted with it.

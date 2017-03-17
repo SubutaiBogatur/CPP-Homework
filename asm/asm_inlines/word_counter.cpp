@@ -191,7 +191,8 @@ void measure_time(bool is_fast = true, uint32_t times = 10)
     {
         std::cout << "ans is " << (is_fast ? count_words(s) : count_words_slowly(s)) << std::endl;
     }
-    std::cout << (clock() - start)/CLOCKS_PER_SEC << " seconds used\n";
+    std::time_t finish = clock();
+    std::cout << ((double)finish - (double)start)/(double)CLOCKS_PER_SEC << " seconds used\n";
 }
 
 int main()
@@ -200,8 +201,8 @@ int main()
         std::string str_strange("wwwwwww        wwwwwwwwwww ww www        www w wwwww     ww ww www        www w wwwww");
         std::string str_strange1("aaaaaaaaaa _aaaaaaaaaaaaaaaaaaaa");
 
-        do_tests(1000);
-        // measure_time();
+        //do_tests(1000);
+        measure_time(true, 1);
         // count_words(str);
         return 0;
 }
