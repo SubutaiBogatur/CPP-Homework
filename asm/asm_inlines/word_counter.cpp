@@ -4,20 +4,18 @@
 
 #include <cstdint>
 #include <emmintrin.h>
-#include <stdio.h>
 #include <iostream>
-#include <string>
-#include <cstdlib>
 #include <ctime>
 #include <fstream>
 #include "test_utils/test_utils.h"
 
-bool logging_is_enabled = true;
+bool logging_is_enabled = false;
 
 #define LOG(x) do { \
   if (logging_is_enabled) { std::cerr << x; } \
 } while (0)
 
+//prints _m128i register byte by byte
 std::string to_string_by_bytes(__m128i var, bool is_signed = false)
 {
     std::string ret;
@@ -30,6 +28,8 @@ std::string to_string_by_bytes(__m128i var, bool is_signed = false)
     }
     return ret;
 }
+
+static __m128i space_mask_reg = _mm_set_epi8(32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32);
  
 uint32_t count_words(std::string const& str)
 {
@@ -41,8 +41,6 @@ uint32_t count_words(std::string const& str)
     {
         return count_words_slowly(str);
     }
-
-    __m128i space_mask_reg = _mm_set_epi8(32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32);
 
     size_t cur_position = 0;
     size_t ans = 0;
@@ -66,9 +64,8 @@ uint32_t count_words(std::string const& str)
     }
 
     //some crutches
-    if(cur_position == size) return ans;
     if ((is_whitespace && *(arr + cur_position) != ' ' && cur_position != 0)
-                  || (cur_position == 0 && *arr != ' ')) ans++;
+        || (cur_position == 0 && *arr != ' ')) ans++;
     if(cur_position != 0 && *arr != ' ') ans++;
     //
 
@@ -89,12 +86,28 @@ uint32_t count_words(std::string const& str)
             :"=x"(next_cmp), "=x"(trasher)
             :"r"(arr + cur_position), "0"(space_mask_reg));
     
-
     for(size_t i = cur_position; i < end_of_vectorization; i += 16) //while i < new size (floor 16) - 16 (- 16 because, always reading next bytes)
     {
-        //here we write many asm inlines for debugging, later unite in one
-
         cur_cmp = next_cmp;
+
+        //in our byte there is space,
+        //  but in right neigbour there is no space (ie 1 if space before start of word)
+        //result = not cmp_res_shifted and cmp_res
+        //this result is summed and stored in store, then store is checked
+        //  not to 
+
+        /*__asm__("movdqa\t" "(%3), %4\n"
+                "pcmpeqb\t" "%4, %0\n"
+                "movdqa\t" "%0, %7\n"
+                "palignr\t" "$1, %5, %7\n"
+                "pandn\t" "%5, %7\n"
+                "psubsb\t" "%7, %6\n"
+                "paddusb\t" "%6, %1\n"
+                "pmovmskb\t" "%1, %2"
+                :"=x"(next_cmp), "=x"(store), "=r"(msk)
+                :"r"(arr + i + 16), "x"(trasher), 
+                    "0"(space_mask_reg), "x"(cur_cmp), 
+                    "x"(_mm_set_epi32(0, 0, 0, 0)), "1"(store), "x"(trasher)); */
 
         //get cmp for next part of string
         __asm__("movdqa\t" "(%2), %1\n"
@@ -125,38 +138,23 @@ uint32_t count_words(std::string const& str)
                 :"=x"(store), "=r"(msk) 
                 :"x"(cmp_result_shifted), "x"(cur_cmp), "x"(_mm_set_epi32(0, 0, 0, 0)), "0"(store)
                 :"2", "4");
-       LOG("Store " + to_string_by_bytes(store) + "\n");
+        LOG("Store " + to_string_by_bytes(store) + "\n");
+
 
         //if at least one byte in store is more than 127
         //  or if it is last iteration of loop
         if(msk != 0 || i + 16 >= end_of_vectorization) 
         {
-            //sum all bytes in store and then refresh it
-            __m128i result_of_abs;
-            __asm__("psadbw\t" "%1, %0"
-                    :"=x"(result_of_abs), "=x"(trasher)
-                    :"0"(_mm_set_epi32(0, 0, 0, 0)), "1"(store));
-            LOG("Abs   " + to_string_by_bytes(result_of_abs, false) + "\n");
-
-            //here we move lowest 32 bits (ie d) of abs to low.
-            //  32 bits is enough, because max value of low can be:
-            //  128 * 8 < 2 ^ 32
-            uint32_t low;
-            __asm__("movd\t" "%1, %0"
-                    :"=r"(low)
-                    :"x"(result_of_abs));
+            __m128i tmp1, tmp2; //to get different registers
+            uint32_t high, low;
+            __asm__("psadbw\t" "%3, %0\n"
+                    "movd\t" "%0, %2\n"
+                    "movhlps\t" "%0, %0\n"
+                    "movd\t" "%0, %1\n"
+                    :"=x" (tmp1), "=r"(high), "=r"(low), "=x"(tmp2)
+                    :"0"(_mm_set_epi32(0, 0, 0, 0)), "3"(store));
+            LOG("psadbow " + to_string_by_bytes(tmp1) + "\n");
             LOG("low    " + std::to_string(low) + "\n");
-
-            uint32_t high;
-            __m128i abs_low;
-            __asm__("movhlps\t" "%1, %0"
-                    :"=x"(abs_low), "=x"(trasher)
-                    :"1"(result_of_abs));
-            LOG("LAbs  " + to_string_by_bytes(abs_low, false) + "\n");
-
-            __asm__("movd\t" "%1, %0"
-                    :"=r"(high)
-                    :"x"(abs_low));
             LOG("high   " + std::to_string(high) + "\n");
 
             ans += high + low;
@@ -224,7 +222,7 @@ void measure_time(bool is_fast = true, uint32_t times = 10)
     std::time_t start = clock();
     for(size_t i = 0; i < times; i++) 
     {
-        is_fast ? count_words(s) : count_words_slowly(s);
+        std::cout << "ans is " << (is_fast ? count_words(s) : count_words_slowly(s)) << std::endl;
     }
     std::cout << (clock() - start)/CLOCKS_PER_SEC << " seconds used\n";
 }
@@ -235,7 +233,7 @@ int main()
         std::string str_strange("wwwwwww        wwwwwwwwwww ww www        www w wwwww     ww ww www        www w wwwww");
         std::string str_strange1("aaaaaaaaaa _aaaaaaaaaaaaaaaaaaaa");
 
-        do_tests();
-
+        measure_time(false);
+        //std::cout << count_words(str) << std::endl;
         return 0;
 }
