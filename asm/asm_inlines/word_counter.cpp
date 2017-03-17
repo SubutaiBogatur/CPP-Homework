@@ -74,75 +74,45 @@ uint32_t count_words(std::string const& str)
     //main part, using vectorization, every step is 16 bytes
     __m128i store = _mm_set_epi32(0, 0, 0, 0); //variable is used to store bytes got in `for` loop
     __m128i cur_cmp, next_cmp; //variables store current 16 bytes and next 16 bytes respectively after comparing them with space mask
-    __m128i trasher; //todo delete later  
 
     //vectorization is done on indexes: [cur_position; (size - cur_position) % 16 - 16]
     size_t end_of_vectorization = size - (size - cur_position) % 16 - 16;
     
     //there is always current and next, because of size check
     //get first 16 bytes of string from memory and compare them with space mask
+    __m128i tmp;
     __asm__("movdqa\t" "(%2), %1\n"
             "pcmpeqb\t" "%1, %0"
-            :"=x"(next_cmp), "=x"(trasher)
+            :"=x"(next_cmp), "=x"(tmp)
             :"r"(arr + cur_position), "0"(space_mask_reg));
     
     for(size_t i = cur_position; i < end_of_vectorization; i += 16) //while i < new size (floor 16) - 16 (- 16 because, always reading next bytes)
     {
+        // std::cout << "here\n";
         cur_cmp = next_cmp;
 
-        //in our byte there is space,
+        // in our byte there is space,
         //  but in right neigbour there is no space (ie 1 if space before start of word)
-        //result = not cmp_res_shifted and cmp_res
-        //this result is summed and stored in store, then store is checked
-        //  not to 
-
-        /*__asm__("movdqa\t" "(%3), %4\n"
-                "pcmpeqb\t" "%4, %0\n"
-                "movdqa\t" "%0, %7\n"
-                "palignr\t" "$1, %5, %7\n"
-                "pandn\t" "%5, %7\n"
-                "psubsb\t" "%7, %6\n"
-                "paddusb\t" "%6, %1\n"
-                "pmovmskb\t" "%1, %2"
-                :"=x"(next_cmp), "=x"(store), "=r"(msk)
-                :"r"(arr + i + 16), "x"(trasher), 
-                    "0"(space_mask_reg), "x"(cur_cmp), 
-                    "x"(_mm_set_epi32(0, 0, 0, 0)), "1"(store), "x"(trasher)); */
-
-        //get cmp for next part of string
-        __asm__("movdqa\t" "(%2), %1\n"
-                "pcmpeqb\t" "%1, %0"
-                :"=x"(next_cmp), "=x"(trasher)
-                :"r"(arr + i + 16), "0"(space_mask_reg));
-
-        LOG("Curcmp" + to_string_by_bytes(cur_cmp) + "\n");
-        LOG("Nexcmp" + to_string_by_bytes(next_cmp) + "\n");
-
-        __m128i cmp_result_shifted;
-        __asm__("palignr\t" "$1, %1, %0"
-                :"=x"(cmp_result_shifted), "=x"(trasher)
-                :"0"(next_cmp), "1"(cur_cmp));
-        LOG("Shifte" + to_string_by_bytes(cmp_result_shifted) + "\n");
-
-        //in our byte there is space,
-        //  but in right neigbour there is no space (ie 1 if space before start of word)
-        //result = not cmp_res_shifted and cmp_res
-        //this result is summed and stored in store
+        //  result = not cmp_res_shifted and cmp_res
+        //  this result is summed and stored in store, then store is checked
+        //  not to overflow by msk 
 
         uint32_t msk;
 
-       __asm__("pandn\t" "%3, %2\n"
-                "psubsb\t" "%2, %4\n"
-                "paddusb\t" "%4, %0\n"
-                "pmovmskb\t" "%0, %1" 
-                :"=x"(store), "=r"(msk) 
-                :"x"(cmp_result_shifted), "x"(cur_cmp), "x"(_mm_set_epi32(0, 0, 0, 0)), "0"(store)
-                :"2", "4");
-        LOG("Store " + to_string_by_bytes(store) + "\n");
+        __m128i tmp04, tmp05, tmp06, tmp07; //to get different registers
+        __asm__("movdqa\t" "(%7), %3\n"
+                "pcmpeqb\t" "%3, %0\n"
+                "movdqa\t" "%0, %6\n"
+                "palignr\t" "$1, %4, %6\n"
+                "pandn\t" "%4, %6\n"
+                "psubsb\t" "%6, %5\n"
+                "paddusb\t" "%5, %1\n"
+                "pmovmskb\t" "%1, %2"
+                :"=x"(next_cmp), "=x"(store), "=r"(msk), "=x"(tmp04), "=x"(tmp05), "=x"(tmp06), "=x"(tmp07)
+                :"r"(arr + i + 16), "0"(space_mask_reg), "4"(cur_cmp), "5"(_mm_set_epi32(0, 0, 0, 0)), "1"(store));  
 
-
-        //if at least one byte in store is more than 127
-        //  or if it is last iteration of loop
+        // if at least one byte in store is more than 127
+         // or if it is last iteration of loop
         if(msk != 0 || i + 16 >= end_of_vectorization) 
         {
             __m128i tmp1, tmp2; //to get different registers
@@ -153,9 +123,6 @@ uint32_t count_words(std::string const& str)
                     "movd\t" "%0, %1\n"
                     :"=x" (tmp1), "=r"(high), "=r"(low), "=x"(tmp2)
                     :"0"(_mm_set_epi32(0, 0, 0, 0)), "3"(store));
-            LOG("psadbow " + to_string_by_bytes(tmp1) + "\n");
-            LOG("low    " + std::to_string(low) + "\n");
-            LOG("high   " + std::to_string(high) + "\n");
 
             ans += high + low;
             store = _mm_set_epi32(0, 0, 0, 0);
@@ -194,8 +161,8 @@ void do_tests(size_t num = 50000)
     std::cout << std::time(0) << std::endl;
     for(size_t i = 0; i < num; i++)
     {
-        std::string str = get_random_string(65, 7000, 2);
-        std::cerr << "New string:\n" << str << std::endl << std::endl;
+        std::string str = get_random_string(1e5, 2e8, 2);
+        // std::cerr << "New string:\n" << str << std::endl << std::endl;
         uint32_t fast_ans = count_words(str);
         uint32_t slow_ans = count_words_slowly(str);
 
@@ -233,7 +200,8 @@ int main()
         std::string str_strange("wwwwwww        wwwwwwwwwww ww www        www w wwwww     ww ww www        www w wwwww");
         std::string str_strange1("aaaaaaaaaa _aaaaaaaaaaaaaaaaaaaa");
 
-        measure_time(false);
-        //std::cout << count_words(str) << std::endl;
+        do_tests(1000);
+        // measure_time();
+        // count_words(str);
         return 0;
 }
