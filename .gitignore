@@ -2,6 +2,7 @@
 cpp/big_integer/.idea/
 cpp/big_integer/build/
 cpp/big_integer/main.cpp
+cpp/big_integer/cmake-build-debug/
 
 cpp/bind/.idea/
 cpp/bind/build/
@@ -17,6 +18,14 @@ cpp/either/build/
 cpp/either/CMakeLists.txt
 cpp/either/out
 cpp/either/a.out
+cpp/either/cmake-build-debug
+
 
 *.s 
 *.out
+
+# Profiler files:
+*.data
+*.data.old
+
+
