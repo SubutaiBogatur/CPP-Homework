@@ -7,11 +7,16 @@
 #include <sys/epoll.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include <errno.h>
 #include <assert.h>
+
+#include <map>
 #include <iostream>
 #include <string.h>
+#include <memory>
+#include <utility>
 
 bool logging_is_enabled = true;
 
@@ -20,9 +25,34 @@ bool logging_is_enabled = true;
 } while (0)
 
 //in such chunks reading and writing is done
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 16 //for debugging only
+#define STORING_BUFFER_SIZE BUFFER_SIZE * 4
 #define MAX_NUMBER_CLIENTS 128
 #define MAX_EVENTS 1024
+#define PORT 8667
+
+struct storing_buffer
+{
+    //todo probably some cyclic structure should be implemented here
+    size_t filled;
+    char buffer[STORING_BUFFER_SIZE];
+
+    storing_buffer()
+    {
+        filled = 0;
+    }
+
+    //todo strongly tmp function, which mb can be later optimized:
+    //moves all bytes left
+    void shl(size_t val)
+    {
+        //here we have terrible problems with aliasing, thus tmp arr
+        char tmp[STORING_BUFFER_SIZE];
+        memcpy(tmp, buffer + filled, filled - val);
+        memcpy(buffer, tmp, filled - val);
+        filled -= val;
+    }
+};
 
 int create_socket()
 {
@@ -114,27 +144,16 @@ int accept_client(int socket_fd)
     return client_fd;
 }
 
-void add_client_to_epoll(int epoll_fd, int client_fd)
-{
-    epoll_event event;
-    event.events = EPOLLIN | EPOLLET;
-    event.data.fd = client_fd;
-    int res = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event);
-    if (res != 0)
-    {
-        LOG("Error is" + std::string(strerror(errno)) + ". ");
-        assert (false);
-    }
-    LOG("Another client added to epoll\n");
-}
+//map stores pointer to all the clients storing buffers
+std::map<int, storing_buffer> storing_buffers;
 
-void start_echo_server(uint16_t port)
+void start_echo_server()
 {
     int socket_fd = create_socket();
-    bind_socket(socket_fd, port);
+    bind_socket(socket_fd, PORT);
     start_listening(socket_fd);
 
-    int epoll_fd = create_epoll(); //flags is zero
+    int epoll_fd = create_epoll();
     add_listening_to_epoll(epoll_fd, socket_fd);
     epoll_event events[MAX_EVENTS]; //to get after waiting
 
@@ -144,6 +163,7 @@ void start_echo_server(uint16_t port)
     {
         //number of events happened, when sleeping
         int num = start_sleeping(epoll_fd, events);
+
         //lets process all events
         for (int i = 0; i < num; i++)
         {
@@ -151,32 +171,76 @@ void start_echo_server(uint16_t port)
             if (events[i].data.fd == socket_fd)
             {
                 int client_fd = accept_client(socket_fd);
-//                int flags = fcntl(fd, F_GETFL, 0);
-//                err = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-                //mb set nonblocking
-                add_client_to_epoll(epoll_fd, client_fd);
+                //setnonblocking
+                fcntl(client_fd, F_SETFL, fcntl(client_fd, F_GETFD, 0)| O_NONBLOCK);
+
+                epoll_event event;
+                event.events = EPOLLIN | EPOLLOUT | EPOLLET;
+                event.data.fd = client_fd;
+                int res = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event);
+                if (res != 0)
+                {
+                    LOG("Error is" + std::string(strerror(errno)) + ". ");
+                    assert (false);
+                }
+                LOG("Another client added to epoll\n");
+
+                storing_buffers.insert(std::pair<int, storing_buffer>(client_fd, storing_buffer()));
+
             }
-            else
+            else if((events[i].events & EPOLLIN) != 0)
             {
-                char buffer[BUFFER_SIZE]; // buffer we'll use for reading and writing
-                //read
-                int r = read(events[i].data.fd, (void *) buffer, BUFFER_SIZE);
+                int client_fd = events[i].data.fd;
+                //if client is ready to read from
+                int r = read(client_fd, (void *) buffer, BUFFER_SIZE);
                 assert (r >= 0);
 
                 if (r == 0)
                 {
-                    LOG(std::string("Client with fd " + std::to_string(events[i].data.fd) + " is closed\n"));
+                    LOG(std::string("Client with fd " + std::to_string(client_fd) + " is closed\n"));
                     //connection closed by client
-                    //mb smhw delete client from epoll
+                    storing_buffers.erase(client_fd); //delete from map
                     continue;
                 }
 
-                //just way of logging, writing to stderr
-                write(2, (void *) buffer, r);
+                if (r == 2)
+                {
+                    //todo only for debugging:
+                    //  empty string means ready to write to client
+                    events[num].events = 4;//write can be done
+                    events[num++].data.fd = client_fd;
+                    continue;
+                }
 
-                int w = write(events[i].data.fd, (void *) buffer, r);
-                assert (w >= 0);
-                assert (w == r); //todo, what if not equals, but not error?
+                //there is no while not to get busy wait, write is nonblocking
+                int strongly_tmp = r / 2; //we decide not to write full information first time to test buffers
+                int w = write(client_fd, (void *) buffer, strongly_tmp);
+
+                if (w != r)
+                {
+                    //todo is ok?, what't the diff between -1 and 0 returned values?
+                    //todo check if storing buffer is not overflowing
+                    w = w == -1 ? 0 : w;
+
+                    int left_to_write = r - w;
+                    memcpy(storing_buffers.at(client_fd).buffer + storing_buffers.at(client_fd).filled,
+                           buffer + w, left_to_write); //copy unwritten to data to storing buffer
+                    storing_buffers.at(client_fd).filled += left_to_write;
+                }
+            }
+            else
+            {
+                //else client has woken up and is ready to read something from our storing buffer
+                int client_fd = events[i].data.fd;
+                if (storing_buffers.at(client_fd).filled == 0)
+                {
+                    //there is nothing more to write
+                    continue;
+                }
+                int w = write(client_fd,
+                              (void *) storing_buffers.at(client_fd).buffer,
+                              storing_buffers.at(client_fd).filled);
+                storing_buffers.at(client_fd).shl(w);
             }
         }
     }
