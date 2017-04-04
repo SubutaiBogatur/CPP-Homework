@@ -12,6 +12,8 @@
 #include <errno.h>
 #include <assert.h>
 
+#include <ctime>
+
 #include <map>
 #include <list>
 #include <string.h>
@@ -28,7 +30,7 @@ bool logging_is_enabled = true;
 #define STORING_BUFFER_SIZE BUFFER_SIZE * 4
 #define MAX_NUMBER_CLIENTS 128
 #define MAX_EVENTS 1024
-#define PORT 8667
+#define PORT 8666
 #define TIMEOUT 10 //value in seconds. If client does nothing in this time, it is disconnected
 
 //bunch of functions for nice and beautiful error reporting
@@ -45,7 +47,8 @@ static bool is_zero(int a)
 struct echo_exception
 {
     const std::string msg;
-    echo_exception(std::string msg) : msg(msg) {}
+    echo_exception(std::string msg) : msg(msg)
+    {}
 };
 
 //method ensures, that val satisfies given condition. If function returns false on val, exception
@@ -67,6 +70,7 @@ static void ensure(std::string on_success)
 
 struct client_wrapper
 {
+    struct timeout_wrapper;
 private:
     struct storing_buffer
     {
@@ -93,9 +97,32 @@ private:
 
     const int fd;
     storing_buffer buffer;
-    std::list<time_t>::iterator it; //position in queue
+    std::list<timeout_wrapper>::iterator it; //position in queue
 
 public:
+
+    struct timeout_wrapper
+    {
+        time_t time; //ie time, when some action should happen, POSIX time since 1970
+        client_wrapper *const client; //client, with which action is accosiated
+
+        void update_time()
+        {
+            time = std::time(nullptr) + TIMEOUT;
+        }
+
+        timeout_wrapper(client_wrapper& client) : client(&client)
+        {
+            update_time();
+        }
+    };
+
+    //constructor puts timeout in queue
+    client_wrapper(const int fd, std::list<timeout_wrapper>& queue) : fd(fd)
+    {
+        queue.push_back(timeout_wrapper(*this));
+        it = --queue.end();
+    }
 
     int get_fd()
     {
@@ -107,7 +134,7 @@ public:
         return buffer.filled;
     }
 
-    const char* get_buffer()
+    const char *get_buffer()
     {
         return buffer.buffer;
     }
@@ -127,15 +154,39 @@ public:
         return std::to_string(fd);
     }
 
-    client_wrapper(const int fd) :fd(fd) {}
+    void remove_from_queue(std::list<timeout_wrapper>& queue)
+    {
+        queue.erase(it);
+    }
+
+    //this method is called, when the client has shown some activity
+    //  (eg it read data, or wrote it, or was accepted)
+    //  The method adds another node to queue at the end, giving
+    //  it needed timeout (curtime + TIMEOUT). Old node is obv being deleted
+    //invariant: iterator is already pointing to smwh in queue
+    void update_queue(std::list<timeout_wrapper>& queue)
+    {
+        this->remove_from_queue(queue);
+        queue.push_back(timeout_wrapper(*this));
+        it = --queue.end();
+    }
 
     //method reads BUFFER_SIZE bytes to current storing buffer and returns what syscall read returns
     int read_cl()
     {
-        int r = read(fd, (void *) (this->get_buffer() + this->get_filled()), BUFFER_SIZE); //our invariant is that there is always such free size in storing buffer
+        int r = read(fd, (void *) (this->get_buffer() + this->get_filled()),
+                     BUFFER_SIZE); //our invariant is that there is always such free size in storing buffer
         this->get_filled() += r;
-        ensure(r, is_not_negative, r != 0 ? std::to_string(r) + " bytes read from the client and put in storing buffer\n" : "");
+        ensure(r, is_not_negative,
+               r != 0 ? std::to_string(r) + " bytes read from the client and put in storing buffer\n" : "");
         return r;
+    }
+
+    void write_cl()
+    {
+        int w = write(fd, (void *) this->get_buffer(), this->get_filled());
+        this->buffer_shl(w);
+        ensure(std::to_string(w) + " bytes written, " + std::to_string(this->get_filled()) + " left in buffer\n");
     }
 
     //let's call client nasty, if it writes much faster, than reads.
@@ -169,14 +220,18 @@ public:
         event.events = EPOLLIN;
         event.data.fd = server_fd;
         int res = epoll_ctl(fd, EPOLL_CTL_ADD, server_fd, &event);
-        ensure(res, is_zero, "Listening socket " + std::to_string(server_fd) + " added to epoll " + std::to_string(fd) + "\n");
+        ensure(res, is_zero,
+               "Listening socket " + std::to_string(server_fd) + " added to epoll " + std::to_string(fd) + "\n");
     }
 
     //method returns number of events occured, when got up
-    int start_sleeping(epoll_event* events, int timeout)
+    int start_sleeping(epoll_event *events, int timeout)
     {
-        int num = epoll_wait(fd, events, MAX_EVENTS, timeout);
-        ensure(num, is_not_negative, "Epoll has waken up with " + std::to_string(num) + " new events" + (num == 0 ? ". Timeout is exceeded" : "") + "\n");
+        ensure("Epoll " + std::to_string(fd) + " is going to sleep with timeout (secs): " + std::to_string(timeout) +
+               "\n");
+        int num = epoll_wait(fd, events, MAX_EVENTS, timeout * 1000); //mul to get millisecs
+        ensure(num, is_not_negative, "Epoll has waken up with " + std::to_string(num) + " new events" +
+                                     (num == 0 ? ". Timeout is exceeded" : "") + "\n");
         return num;
     }
 
@@ -185,14 +240,14 @@ public:
     void add_client(client_wrapper client)
     {
         //setnonblocking
-        int res = fcntl(client.get_fd(), F_SETFL, fcntl(client.get_fd(), F_GETFD, 0)| O_NONBLOCK);
+        int res = fcntl(client.get_fd(), F_SETFL, fcntl(client.get_fd(), F_GETFD, 0) | O_NONBLOCK);
         ensure(res, is_not_negative, "");
 
         epoll_event event;
         event.events = EPOLLIN | EPOLLOUT | EPOLLET;
         event.data.fd = client.get_fd();
         res = epoll_ctl(fd, EPOLL_CTL_ADD, client.get_fd(), &event);
-        ensure(res, is_zero, "Client " + (std::string)client + " added to epoll " + std::to_string(fd) + "\n");
+        ensure(res, is_zero, "Client " + (std::string) client + " added to epoll " + std::to_string(fd) + "\n");
     }
 
     void remove_client(client_wrapper client)
@@ -201,11 +256,22 @@ public:
     }
 };
 
+void print_list(std::list<client_wrapper::timeout_wrapper> queue)
+{
+    std::cerr << (queue.empty() ? "No events in queue" : "");
+    for (auto it = queue.begin(); it != queue.end(); it++)
+    {
+        std::cerr << "fd: " << it->client->get_fd() << " time: " << it->time << " |";
+    }
+    std::cerr << std::endl;
+}
+
 struct echo_server
 {
     //map allows to get client_wrapper quickly knowing only client fd
     //  it also allows to check if given client is already present
-    std::map<int, client_wrapper*> map;
+    std::map<int, client_wrapper *> map;
+    std::list<client_wrapper::timeout_wrapper> upcoming_events;
 
     ~echo_server()
     {
@@ -215,9 +281,8 @@ struct echo_server
         }
     }
 
-    echo_server() {}
-
-//    std::list<time_t> upcoming_events;
+    echo_server()
+    {}
 
     int create_socket()
     {
@@ -234,14 +299,14 @@ struct echo_server
         addr.sin_family = AF_INET; //using ipv4
         addr.sin_port = htons(port); //select port
         addr.sin_addr.s_addr = htonl(INADDR_ANY); //listen to all ips
-        int bind_res = bind(socket_fd, (sockaddr *)&addr, sizeof(sockaddr));
+        int bind_res = bind(socket_fd, (sockaddr *) &addr, sizeof(sockaddr));
         ensure(bind_res, is_zero, "Binded to port " + std::to_string(port) + "\n");
     }
 
     void start_listening(int socket_fd)
     {
         int listen_res = listen(socket_fd, MAX_NUMBER_CLIENTS);
-        ensure(listen_res, is_zero, "Socket " + std::to_string(socket_fd) +  " is in listening state\n");
+        ensure(listen_res, is_zero, "Socket " + std::to_string(socket_fd) + " is in listening state\n");
     }
 
     int accept_client(int socket_fd)
@@ -254,40 +319,37 @@ struct echo_server
     //returns true if something was read
     bool read_to_storing_buffer(epoll_wrapper epoll_w, client_wrapper& client)
     {
-        ensure("Client " + (std::string)client + " is ready to read from\n");
+        ensure("Client " + (std::string) client + " is ready to read from\n");
         int r = client.read_cl();
 
         if (client.is_nasty()) //nasty nasty
         {
             //close nasty one
-            ensure(close(client.get_fd()), is_zero, "Nasty client " + (std::string)client + " closed and soon removed from epoll\n");
+            ensure(close(client.get_fd()), is_zero,
+                   "Nasty client " + (std::string) client + " closed and soon removed from epoll\n");
+        }
+        if (r == 0 || client.is_nasty())
+        {
+            ensure(std::string(r == 0 ? "Client with fd " + (std::string) client + " closed the connection\n" : ""));
             epoll_w.remove_client(client);
+            map.erase(map.find(client.get_fd()));
+            client.remove_from_queue(upcoming_events);
             return false;
         }
 
-        if (r == 0)
-        {
-            ensure(std::string("Client with fd " + (std::string)client + " closed the connection\n"));
-            epoll_w.remove_client(client);
-            return false;
-        }
+        client.update_queue(upcoming_events);
         return true;
     }
 
     void write_to_client(client_wrapper& client)
     {
-        ensure("Client " + (std::string)client + " is ready to write to\n");
+        ensure("Client " + (std::string) client + " is ready to write to\n");
         if (client.is_buffer_empty())
         {
             return;
         }
-
-        int w = write(client.get_fd(),
-                      (void *) client.get_buffer(),
-                      client.get_filled());
-        w = 2;
-        client.buffer_shl(w);
-        ensure(std::to_string(w) + " bytes written, " + std::to_string(client.get_filled()) + " left in buffer\n");
+        client.write_cl();
+        client.update_queue(upcoming_events);
     }
 
     void start_echo_server()
@@ -302,8 +364,22 @@ struct echo_server
 
         while (true)
         {
-            //number of events happened, when sleeping
-            int num = epoll_w.start_sleeping(events, -1);
+            print_list(upcoming_events);
+            int num = epoll_w.start_sleeping(events,
+                                             upcoming_events.empty() ?
+                                             -1 : upcoming_events.begin()->time - std::time(nullptr));
+
+            if (num == 0)
+            {
+                //else timeout exceeded
+                client_wrapper lazy_client = *upcoming_events.begin()->client;
+                ensure(close(lazy_client.get_fd()), is_zero,
+                       "Lazy client " + (std::string) lazy_client + " closed and soon removed from epoll\n");
+                epoll_w.remove_client(lazy_client);
+                map.erase(map.find(lazy_client.get_fd()));
+                lazy_client.remove_from_queue(upcoming_events);
+                continue;
+            }
 
             //lets process all events
             for (int i = 0; i < num; i++)
@@ -312,22 +388,20 @@ struct echo_server
                 if (events[i].data.fd == server_fd)
                 {
                     //for every new client memory is allocated
-                    client_wrapper* client = new client_wrapper(accept_client(server_fd));
-                    map.insert(std::pair<int, client_wrapper*>(client->get_fd(), client));
+                    client_wrapper *client = new client_wrapper(accept_client(server_fd), upcoming_events);
+                    map.insert(std::pair<int, client_wrapper *>(client->get_fd(), client));
                     epoll_w.add_client(*client);
-                }
-                else if((events[i].events & EPOLLIN) != 0)
+                } else if ((events[i].events & EPOLLIN) != 0)
                 {
                     // if client is ready to write data to us
-                    client_wrapper* client = map.at(events[i].data.fd);
+                    client_wrapper *client = map.at(events[i].data.fd);
                     if (read_to_storing_buffer(epoll_w, *client))
                     {
                         //add write to this fd in the queue
                         events[num].events = EPOLLOUT; //write can be done
                         events[num++].data.fd = client->get_fd();
                     }
-                }
-                else
+                } else if ((events[i].events & EPOLLOUT) != 0)
                 {
                     //else client has woken up and is ready to read something from our storing buffer
                     write_to_client(*map.at(events[i].data.fd));
@@ -340,7 +414,7 @@ struct echo_server
 
 int main()
 {
-    std::cout << "Main started!" << std::endl;
+//    std::cout << "Main started!" << std::endl;
     echo_server echo;
     echo.start_echo_server();
 
