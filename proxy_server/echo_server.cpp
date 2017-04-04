@@ -5,12 +5,13 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
+#include <sys/signalfd.h>
+#include <signal.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <fcntl.h>
 
 #include <errno.h>
-#include <assert.h>
 
 #include <ctime>
 
@@ -18,12 +19,8 @@
 #include <list>
 #include <string.h>
 #include <memory>
-#include <utility>
-#include <functional>
 
 #include <iostream>
-
-bool logging_is_enabled = true;
 
 //in such chunks reading and writing is done
 #define BUFFER_SIZE 16 //for debugging only
@@ -201,11 +198,17 @@ struct epoll_wrapper
 {
 private:
     const int fd;
+    int signal_fd;
 
 public:
     int get_fd()
     {
         return fd;
+    }
+
+    int get_signal_fd()
+    {
+        return signal_fd;
     }
 
     //constructor creates new epoll fd using syscall
@@ -254,9 +257,21 @@ public:
     {
         epoll_ctl(fd, EPOLL_CTL_DEL, client.get_fd(), NULL);
     }
+
+    void add_signal_handling()
+    {
+        sigset_t mask;
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGTERM);
+        sigaddset(&mask, SIGINT);
+        signal_fd = signalfd(-1, &mask, 0);
+        ensure(signal_fd, is_not_negative, "");
+//        epoll_ctl(fd, )
+        //todo ctl
+    }
 };
 
-void print_list(std::list<client_wrapper::timeout_wrapper> queue)
+void log_list(std::list<client_wrapper::timeout_wrapper> queue)
 {
     std::cerr << (queue.empty() ? "No events in queue" : "");
     for (auto it = queue.begin(); it != queue.end(); it++)
@@ -360,11 +375,13 @@ struct echo_server
 
         epoll_wrapper epoll_w;
         epoll_w.add_listening(server_fd); //socket_fd listening for EPOLLIN
+        epoll_w.add_signal_handling();
+
         epoll_event events[MAX_EVENTS]; //to get after waiting
 
         while (true)
         {
-            print_list(upcoming_events);
+            log_list(upcoming_events);
             int num = epoll_w.start_sleeping(events,
                                              upcoming_events.empty() ?
                                              -1 : upcoming_events.begin()->time - std::time(nullptr));
@@ -391,6 +408,16 @@ struct echo_server
                     client_wrapper *client = new client_wrapper(accept_client(server_fd), upcoming_events);
                     map.insert(std::pair<int, client_wrapper *>(client->get_fd(), client));
                     epoll_w.add_client(*client);
+                } else if (events[i].data.fd == epoll_w.get_signal_fd())
+                {
+                    //caught signal, removing all signs of out existence
+                    for (auto it = map.begin(); it != map.end(); it++)
+                    {
+                        ensure("Server is closing because of signal.\n");
+                        ensure(close(it->second->get_fd()), is_zero,
+                               "Client " + std::to_string(it->second->get_fd()) + " was closed\n");
+                    }
+                    exit(0);
                 } else if ((events[i].events & EPOLLIN) != 0)
                 {
                     // if client is ready to write data to us
