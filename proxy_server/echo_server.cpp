@@ -27,7 +27,7 @@
 #define STORING_BUFFER_SIZE BUFFER_SIZE * 4
 #define MAX_NUMBER_CLIENTS 128
 #define MAX_EVENTS 1024
-#define PORT 8666
+#define PORT 8667
 #define TIMEOUT 10 //value in seconds. If client does nothing in this time, it is disconnected
 
 //bunch of functions for nice and beautiful error reporting
@@ -141,7 +141,7 @@ public:
         return this->get_filled() == 0;
     }
 
-    void buffer_shl(int v)
+    void buffer_shl(size_t v)
     {
         this->buffer.shl(v);
     }
@@ -171,8 +171,8 @@ public:
     //method reads BUFFER_SIZE bytes to current storing buffer and returns what syscall read returns
     int read_cl()
     {
-        int r = read(fd, (void *) (this->get_buffer() + this->get_filled()),
-                     BUFFER_SIZE); //our invariant is that there is always such free size in storing buffer
+        int r = (int) read(fd, (void *) (this->get_buffer() + this->get_filled()),
+                           BUFFER_SIZE); //our invariant is that there is always such free size in storing buffer
         this->get_filled() += r;
         ensure(r, is_not_negative,
                r != 0 ? std::to_string(r) + " bytes read from the client and put in storing buffer\n" : "");
@@ -181,7 +181,7 @@ public:
 
     void write_cl()
     {
-        int w = write(fd, (void *) this->get_buffer(), this->get_filled());
+        int w = (int) write(fd, (void *) this->get_buffer(), this->get_filled());
         this->buffer_shl(w);
         ensure(std::to_string(w) + " bytes written, " + std::to_string(this->get_filled()) + " left in buffer\n");
     }
@@ -234,7 +234,7 @@ public:
                "\n");
         int num = epoll_wait(fd, events, MAX_EVENTS, timeout * 1000); //mul to get millisecs
         ensure(num, is_not_negative, "Epoll has waken up with " + std::to_string(num) + " new events" +
-                                     (num == 0 ? ". Timeout is exceeded" : "") + "\n");
+                                     (num == 0 ? ". Timeout exceeded" : "") + "\n");
         return num;
     }
 
@@ -264,10 +264,17 @@ public:
         sigemptyset(&mask);
         sigaddset(&mask, SIGTERM);
         sigaddset(&mask, SIGINT);
+
+        ensure(sigprocmask(SIG_BLOCK, &mask, NULL), is_not_negative,
+               "Default handlers for signals disabled\n");
+
         signal_fd = signalfd(-1, &mask, 0);
         ensure(signal_fd, is_not_negative, "");
-//        epoll_ctl(fd, )
-        //todo ctl
+
+        epoll_event event;
+        event.events = EPOLLIN;
+        event.data.fd = signal_fd;
+        epoll_ctl(fd, EPOLL_CTL_ADD, signal_fd, &event);
     }
 };
 
@@ -385,10 +392,9 @@ struct echo_server
             int num = epoll_w.start_sleeping(events,
                                              upcoming_events.empty() ?
                                              -1 : upcoming_events.begin()->time - std::time(nullptr));
-
             if (num == 0)
             {
-                //else timeout exceeded
+                //timeout exceeded
                 client_wrapper lazy_client = *upcoming_events.begin()->client;
                 ensure(close(lazy_client.get_fd()), is_zero,
                        "Lazy client " + (std::string) lazy_client + " closed and soon removed from epoll\n");
@@ -410,13 +416,14 @@ struct echo_server
                     epoll_w.add_client(*client);
                 } else if (events[i].data.fd == epoll_w.get_signal_fd())
                 {
+                    ensure("Server is closing because of a signal.\n");
                     //caught signal, removing all signs of out existence
                     for (auto it = map.begin(); it != map.end(); it++)
                     {
-                        ensure("Server is closing because of signal.\n");
                         ensure(close(it->second->get_fd()), is_zero,
                                "Client " + std::to_string(it->second->get_fd()) + " was closed\n");
                     }
+                    ensure(close(server_fd), is_zero, "Server was closed\n");
                     exit(0);
                 } else if ((events[i].events & EPOLLIN) != 0)
                 {
@@ -441,7 +448,6 @@ struct echo_server
 
 int main()
 {
-//    std::cout << "Main started!" << std::endl;
     echo_server echo;
     echo.start_echo_server();
 
