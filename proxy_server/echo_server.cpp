@@ -126,6 +126,11 @@ public:
         return fd;
     }
 
+    std::list<timeout_wrapper>::iterator get_it()
+    {
+        return it;
+    }
+
     size_t& get_filled()
     {
         return buffer.filled;
@@ -151,11 +156,6 @@ public:
         return std::to_string(fd);
     }
 
-    void remove_from_queue(std::list<timeout_wrapper>& queue)
-    {
-        queue.erase(it);
-    }
-
     //this method is called, when the client has shown some activity
     //  (eg it read data, or wrote it, or was accepted)
     //  The method adds another node to queue at the end, giving
@@ -163,7 +163,7 @@ public:
     //invariant: iterator is already pointing to smwh in queue
     void update_queue(std::list<timeout_wrapper>& queue)
     {
-        this->remove_from_queue(queue);
+        queue.erase(it);
         queue.push_back(timeout_wrapper(*this));
         it = --queue.end();
     }
@@ -338,6 +338,15 @@ struct echo_server
         return client_fd;
     }
 
+    void remove_client(client_wrapper *to_remove, epoll_wrapper& ep)
+    {
+        ep.remove_client(*to_remove);
+        upcoming_events.erase(to_remove->get_it());
+
+        delete map.find(to_remove->get_fd())->second;
+        map.erase(map.find(to_remove->get_fd()));
+    }
+
     //returns true if something was read
     bool read_to_storing_buffer(epoll_wrapper epoll_w, client_wrapper& client)
     {
@@ -353,9 +362,8 @@ struct echo_server
         if (r == 0 || client.is_nasty())
         {
             ensure(std::string(r == 0 ? "Client with fd " + (std::string) client + " closed the connection\n" : ""));
-            epoll_w.remove_client(client);
-            map.erase(map.find(client.get_fd()));
-            client.remove_from_queue(upcoming_events);
+            remove_client(&client, epoll_w); //address of reference is address of referent
+
             return false;
         }
 
@@ -398,10 +406,8 @@ struct echo_server
                 client_wrapper lazy_client = *upcoming_events.begin()->client;
                 ensure(close(lazy_client.get_fd()), is_zero,
                        "Lazy client " + (std::string) lazy_client + " closed and soon removed from epoll\n");
-                epoll_w.remove_client(lazy_client);
-                map.erase(map.find(lazy_client.get_fd()));
-                lazy_client.remove_from_queue(upcoming_events);
-                continue;
+
+                remove_client(&lazy_client, epoll_w);
             }
 
             //lets process all events
@@ -424,7 +430,7 @@ struct echo_server
                                "Client " + std::to_string(it->second->get_fd()) + " was closed\n");
                     }
                     ensure(close(server_fd), is_zero, "Server was closed\n");
-                    exit(0);
+                    exit(0); //call destructor, which will delete client objects
                 } else if ((events[i].events & EPOLLIN) != 0)
                 {
                     // if client is ready to write data to us
