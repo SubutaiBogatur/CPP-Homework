@@ -10,6 +10,9 @@
 
 struct client_wrapper;
 
+/**
+ * @brief Structure is needed to store upcoming deadliness
+ */
 struct deadline_wrapper
 {
     int timeout;

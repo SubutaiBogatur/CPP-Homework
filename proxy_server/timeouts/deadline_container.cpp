@@ -91,6 +91,11 @@ void deadline_container::remove(deadline_container::list_iterator it)
     }
 }
 
+bool deadline_container::is_empty()
+{
+    return timeouts.size() == 0;
+}
+
 
 
 
