@@ -54,6 +54,7 @@ public:
     list_iterator update(list_iterator it, time_t new_deadline);
 
     //method returns pointer to closest deadline
+    //  pre: container is not empty
     list_iterator get_min();
 };
 

@@ -81,8 +81,8 @@ void deadline_container::remove(deadline_container::list_iterator it)
     if (timeouts.find(it->timeout)->second->size() == 1)
     {
         timeouts.erase(it->timeout);
-        multimap_iterators.erase(it->timeout);
         deadlines.erase(multimap_iterators.find(it->timeout)->second);
+        multimap_iterators.erase(it->timeout);
     } else
     {
         //else because of update it is the last in the queue and we can just
