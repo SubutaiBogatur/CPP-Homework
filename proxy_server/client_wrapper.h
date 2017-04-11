@@ -58,10 +58,36 @@ public:
      */
     ~client_wrapper();
 
-//    int get_fd();
-//    std::list<timeout_wrapper>::iterator get_it();
-//    size_t get_filled();
-//    bool is_buffer_empty();
+    /**
+     * Method returns \c fd of this client
+     */
+    int get_fd();
+
+    /**
+     * Method returns iterator to node in queue, where deadline for this client is stored
+     */
+    list_it get_it();
+
+    /**
+     * Method returns number of bytes in \c buffer, that are filled with data
+     * @return \c st_buffer.filled
+     */
+    size_t get_filled();
+
+    /**
+     * Returns true if \c buffer is empty
+     */
+    bool is_buffer_empty();
+
+    /**
+     * Let's call client nasty, if it writes much faster, than reads.
+     * As a result there is not much free space in storing buffer left and
+     * probably client should be disconnected, because it abuses our trust
+     * @param buffer_size is size of buffer in which all read and write operations are done
+     * @return true, if \c this->st_buffer->buffer_size  \c - \c this->get_filled() is less than \c buffer_size;
+     */
+    bool is_nasty(size_t buffer_size);
+
 //    void buffer_shl(size_t v);
 //    operator std::string();
 
@@ -73,10 +99,6 @@ public:
 
     //methdd writes buffer.filled to fd. Then shl on buffer is made
 //    void write_cl();
-
-    //let's call client nasty, if it writes much faster, than reads.
-    //  As a result there is not much free space in storing buffer left
-//    bool is_nasty();
 };
 
 

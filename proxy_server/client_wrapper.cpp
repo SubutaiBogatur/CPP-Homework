@@ -38,32 +38,39 @@ client_wrapper::~client_wrapper()
                   "Client " + std::to_string(fd) + " was closed\n");
 }
 
+int client_wrapper::get_fd()
+{
+    return fd;
+}
+
+list_it client_wrapper::get_it()
+{
+    return it;
+}
+
+
 //void client_wrapper::init_it(std::list<timeout_wrapper>& queue, std::shared_ptr<client_wrapper> ptr_to_this)
 //{
 //    queue.push_back(timeout_wrapper(ptr_to_this));
 //    it = --queue.end();
 //}
-//
-//int client_wrapper::get_fd()
-//{
-//    return fd;
-//}
-//
-//std::list<timeout_wrapper>::iterator client_wrapper::get_it()
-//{
-//    return it;
-//}
-//
-//size_t client_wrapper::get_filled()
-//{
-//    return st_buffer.filled;
-//}
-//
-//bool client_wrapper::is_buffer_empty()
-//{
-//    return this->get_filled() == 0;
-//}
-//
+
+
+size_t client_wrapper::get_filled()
+{
+    return st_buffer.filled;
+}
+
+bool client_wrapper::is_buffer_empty()
+{
+    return this->get_filled() == 0;
+}
+
+bool client_wrapper::is_nasty(size_t buffer_size)
+{
+    return this->st_buffer.buffer_size - this->get_filled() < buffer_size;
+}
+
 //void client_wrapper::buffer_shl(size_t v)
 //{
 //    this->st_buffer.shl(v);
@@ -99,8 +106,5 @@ client_wrapper::~client_wrapper()
 //    ensure(std::to_string(w) + " bytes written, " + std::to_string(this->get_filled()) + " left in buffer\n");
 //}
 //
-//bool client_wrapper::is_nasty()
-//{
-//    return STORING_BUFFER_SIZE - this->get_filled() < BUFFER_SIZE;
-//}
+
 
