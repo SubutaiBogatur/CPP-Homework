@@ -11,7 +11,7 @@
 struct client_wrapper;
 
 /**
- * @brief Structure is needed to store upcoming deadliness
+ * @brief Structure is needed to store upcoming deadlines.
  */
 struct deadline_wrapper
 {

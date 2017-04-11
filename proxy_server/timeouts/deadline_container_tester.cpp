@@ -8,14 +8,12 @@
 #include <iostream>
 #include <limits>
 
-static time_t get_highest_deadline
-        (int timeout, std::multimap<int, std::list<deadline_wrapper>::iterator>& deadlines)
+static time_t get_highest_deadline(int timeout, std::multimap<int, std::list<deadline_wrapper>::iterator>& deadlines)
 {
     time_t max = 0;
     for (auto it = deadlines.begin(); it != deadlines.end(); it++)
     {
         if (it->second->timeout == timeout && it->second->deadline > max)
-//        if (it->first > max)
         {
             max = it->first;
         }
@@ -38,7 +36,7 @@ static time_t get_min(std::multimap<int, std::list<deadline_wrapper>::iterator>&
 
 void ::tester::do_operations(deadline_container dc, int num_of_operations, int distribution_of_timeouts)
 {
-    std::srand(0);
+    std::srand(time(NULL));
 
     std::multimap<int, std::list<deadline_wrapper>::iterator> deadlines;
 
@@ -51,7 +49,7 @@ void ::tester::do_operations(deadline_container dc, int num_of_operations, int d
             {
                 //do addition
                 int timeout = rand() % distribution_of_timeouts + 1;
-                if(timeout == 70)
+                if (timeout == 70)
                 {
                     std::cout << "70\n";
                 }

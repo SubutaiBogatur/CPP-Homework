@@ -7,5 +7,5 @@
 
 int main()
 {
-    tester::do_operations(deadline_container(), 1000000, 100);
+//    tester::do_operations(deadline_container(), 1000000, 100);
 }
