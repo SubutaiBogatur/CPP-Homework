@@ -2,7 +2,7 @@
 // Created by Aleksandr Tukallo on 11.04.17.
 //
 
-#include "utils/util_functions.h"
+#include "../utils/util_functions.h"
 
 #include "epoll_wrapper.h"
 #include "client_wrapper.h"

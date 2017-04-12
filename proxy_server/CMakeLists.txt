@@ -8,6 +8,7 @@ add_executable(${PROJECT_NAME}
         timeouts/deadline_container.cpp timeouts/deadline_container.h
         timeouts/deadline_wrapper.h
         #[[timeouts/deadline_container_tester.cpp timeouts/deadline_container_tester.h]]
-        client_wrapper.cpp client_wrapper.h
-        utils/util_functions.cpp utils/util_functions.h utils/server_exception.h)
+        utils/util_functions.cpp utils/util_functions.h utils/server_exception.h
+        wrappers/epoll_wrapper.cpp wrappers/epoll_wrapper.h
+        wrappers/client_wrapper.cpp wrappers/client_wrapper.h)
 

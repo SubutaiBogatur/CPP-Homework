@@ -15,12 +15,15 @@ struct client_wrapper;
  */
 struct deadline_wrapper
 {
+    typedef std::shared_ptr<client_wrapper> client_ptr;
+
     int timeout;
     time_t deadline;
-//    std::shared_ptr<client_wrapper> client;
-    int client; //todo debug only, fd instead of struct
+    client_ptr client;
+//    int client; //todo debug only, fd instead of struct
 
-    deadline_wrapper(int timeout, time_t deadline, int client)
+//    deadline_wrapper(int timeout, time_t deadline, int client)
+    deadline_wrapper(int timeout, time_t deadline, client_ptr client)
             : timeout(timeout), deadline(deadline), client(client)
     {}
 };

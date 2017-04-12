@@ -7,7 +7,7 @@
 
 #define _GLIBCXX_USE_CXX11_ABI 0 //for nice gdb debugging
 
-#include "timeouts/deadline_wrapper.h"
+#include "../timeouts/deadline_wrapper.h"
 #include <list>
 
 /**
@@ -94,11 +94,12 @@ public:
     //method creates new timeout wrapper pointing to given client_wrapper and pushes it in q, updating it
 //    void init_it(std::list<timeout_wrapper>& queue, std::shared_ptr<client_wrapper> ptr_to_this);
 
-    //method reads BUFFER_SIZE bytes to current storing buffer and returns what syscall read returns
-//    int read_cl();
+//  method reads count bytes to current storing buffer and returns what syscall read returns
+//  careful: check if not nasty before calling read
+    ssize_t read_from_client(size_t count);
 
-    //methdd writes buffer.filled to fd. Then shl on buffer is made
-//    void write_cl();
+    //method writes buffer.filled bytes from buffer to fd. Then shl on buffer is made
+    void write_cl();
 };
 
 

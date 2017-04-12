@@ -2,8 +2,10 @@
 // Created by Aleksandr Tukallo on 11.04.17.
 //
 
+#define _GLIBCXX_USE_CXX11_ABI 0 //for nice gdb debugging
+
+#include "../utils/util_functions.h"
 #include "client_wrapper.h"
-#include "utils/util_functions.h"
 #include <unistd.h>
 #include <cstring>
 #include <sys/socket.h>
@@ -43,7 +45,7 @@ int client_wrapper::get_fd()
     return fd;
 }
 
-list_it client_wrapper::get_it()
+client_wrapper::list_it client_wrapper::get_it()
 {
     return it;
 }
@@ -88,23 +90,28 @@ bool client_wrapper::is_nasty(size_t buffer_size)
 //    it = --queue.end();
 //}
 //
-//int client_wrapper::read_cl()
-//{
-//    int r = (int) read(fd, (void *) (this->st_buffer.buffer + this->get_filled()),
-//                       BUFFER_SIZE); //our invariant is that there is always such free size in storing buffer
-//    this->st_buffer.filled += r;
-//    ensure(r, is_not_negative,
-//           r != 0 ? std::to_string(r) + " bytes read from the client and put in storing buffer\n" : "");
-//
-//    return r;
-//}
-//
-//void client_wrapper::write_cl()
-//{
-//    int w = (int) write(fd, (void *) this->st_buffer.buffer, this->get_filled());
-//    this->buffer_shl(w);
-//    ensure(std::to_string(w) + " bytes written, " + std::to_string(this->get_filled()) + " left in buffer\n");
-//}
-//
+
+ssize_t client_wrapper::read_from_client(size_t count)
+{
+    ssize_t r = read(fd, (void *) (this->st_buffer.buffer + this->get_filled()),
+                     count); //our invariant is that there is always such free size in storing buffer
+    this->st_buffer.filled += r;
+    utils::ensure(r, utils::is_not_negative,
+                  r != 0 ? std::to_string(r) + " bytes read from the client and put in storing buffer\n" : "");
+    return r;
+}
+
+void client_wrapper::write_cl()
+{
+    ssize_t w = write(fd, (void *) this->st_buffer.buffer, this->get_filled());
+    utils::ensure(w, utils::is_not_negative, "");
+    this->st_buffer.shl((size_t) w); //casting is ok, 'cause non negative
+
+    //todo why cannot I use ensure(std::string) here????
+    utils::ensure(0, utils::is_not_negative, std::to_string(w) + " bytes written, " + std::to_string(this->get_filled())
+                                             + " left in buffer of client " + std::to_string(fd) + "\n");
+//    utils::ensure("falsdfj");
+}
+
 
 
