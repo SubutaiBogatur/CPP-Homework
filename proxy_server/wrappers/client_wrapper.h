@@ -68,6 +68,8 @@ public:
      */
     list_it get_it();
 
+    void set_it(list_it it);
+
     /**
      * Method returns number of bytes in \c buffer, that are filled with data
      * @return \c st_buffer.filled

@@ -113,5 +113,10 @@ void client_wrapper::write_cl()
 //    utils::ensure("falsdfj");
 }
 
+void client_wrapper::set_it(client_wrapper::list_it it)
+{
+    this->it = it;
+}
+
 
 

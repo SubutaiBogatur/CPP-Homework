@@ -4,6 +4,7 @@
 
 #include "deadline_container.h"
 #include <limits>
+#include <iostream>
 
 //function is needed only for comfortable gdb debugging
 static std::map<int, std::list<deadline_wrapper>>
@@ -80,9 +81,13 @@ void deadline_container::remove(deadline_container::list_iterator it)
     it = update(it, std::numeric_limits<time_t>::max());
     if (timeouts.find(it->timeout)->second->size() == 1)
     {
+        std::cout << "83\n";
         timeouts.erase(it->timeout);
+        std::cout << "84\n";
         deadlines.erase(multimap_iterators.find(it->timeout)->second);
+        std::cout << "85\n";
         multimap_iterators.erase(it->timeout);
+        std::cout << "86\n";
     } else
     {
         //else because of update it is the last in the queue and we can just

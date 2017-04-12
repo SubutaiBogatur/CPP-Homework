@@ -2,10 +2,19 @@
 // Created by Aleksandr Tukallo on 09.04.17.
 //
 
-#include "timeouts/deadline_container.h"
-#include "timeouts/deadline_container_tester.h"
+
+#include "utils/server_exception.h"
+#include <iostream>
+#include "echo_server.h"
 
 int main()
 {
-//    tester::do_operations(deadline_container(), 1000000, 100);
+    try
+    {
+        echo_server server;
+        server.start();
+    } catch (server_exception e)
+    {
+        std::cerr << e.what() << std::endl;
+    }
 }
