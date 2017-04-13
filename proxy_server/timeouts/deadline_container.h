@@ -87,14 +87,14 @@ public:
 
     /** @brief method returns smallest deadline, \c O(1)
      *
-     * @pre container is not empty
+     * Throws \c server_exception if container is empty
      *
      * @return iterator to smallest element is returned
      */
     list_iterator get_min();
 
     /**
-     * @brief returns true if there are no wrappers at all currently in container
+     * @brief returns true if there are no wrappers at all currently in container, \c O(1)
      */
     bool is_empty();
 };

@@ -3,6 +3,7 @@
 //
 
 #include "deadline_container.h"
+#include "../utils/server_exception.h"
 #include <limits>
 #include <iostream>
 
@@ -44,6 +45,7 @@ deadline_container::list_iterator deadline_container::add(int timeout, deadline_
     return --it->second->end();
 }
 
+//method invalidates \c it
 deadline_container::list_iterator deadline_container::update_list
         (deadline_container::list_ptr list, deadline_container::list_iterator it, time_t new_deadline)
 {
@@ -62,9 +64,9 @@ deadline_container::list_iterator deadline_container::update(deadline_container:
         list_ptr queue = mm_it->second;
         list_iterator ret = update_list(queue, it, new_deadline);
         deadlines.erase(mm_it);
-        multimap_iterators.erase(it->timeout);
+        multimap_iterators.erase(ret->timeout);
         //next line is another worst line ever
-        multimap_iterators.insert({it->timeout, deadlines.insert({queue->begin()->deadline, queue})});
+        multimap_iterators.insert({ret->timeout, deadlines.insert({queue->begin()->deadline, queue})});
         return ret;
     }
     return update_list(mm_it->second, it, new_deadline);
@@ -73,6 +75,11 @@ deadline_container::list_iterator deadline_container::update(deadline_container:
 //todo what if min not unique
 deadline_container::list_iterator deadline_container::get_min()
 {
+    if (this->is_empty())
+    {
+        throw server_exception(
+                "Trying to get minimum from empty deadline container, read docs before using functions!!");
+    }
     return deadlines.begin()->second->begin();
 }
 
@@ -81,13 +88,10 @@ void deadline_container::remove(deadline_container::list_iterator it)
     it = update(it, std::numeric_limits<time_t>::max());
     if (timeouts.find(it->timeout)->second->size() == 1)
     {
-        std::cout << "83\n";
-        timeouts.erase(it->timeout);
-        std::cout << "84\n";
-        deadlines.erase(multimap_iterators.find(it->timeout)->second);
-        std::cout << "85\n";
-        multimap_iterators.erase(it->timeout);
-        std::cout << "86\n";
+        int timeout = it->timeout; //timeout is saved, because it is invalidated when queue is deleted
+        timeouts.erase(timeout);
+        deadlines.erase(multimap_iterators.find(timeout)->second);
+        multimap_iterators.erase(timeout);
     } else
     {
         //else because of update it is the last in the queue and we can just

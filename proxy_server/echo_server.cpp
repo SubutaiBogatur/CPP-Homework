@@ -9,9 +9,7 @@
 #include "utils/server_exception.h"
 #include <unistd.h>
 #include <sys/socket.h>
-#include <sys/types.h>
 #include <netinet/in.h>
-#include <sys/epoll.h>
 
 #define _GLIBCXX_USE_CXX11_ABI 0
 
@@ -67,12 +65,18 @@ void echo_server::start()
         if (res.first == 0)
         {
             //timeout exceeded
-            client_ptr lazy_client = dc.get_min()->client;
-            utils::ensure(0, utils::is_zero,
-                          "Lazy client " + std::to_string(lazy_client->get_fd()) + " soon removed from epoll\n");
+            time_t expired_deadline = dc.get_min()->deadline;
 
-            epoll_.remove_client(lazy_client); //stop listening
-            dc.remove(lazy_client->get_it());
+            //todo is it ok to delete all the clients in such a manner?
+            while (!dc.is_empty() && dc.get_min()->deadline == expired_deadline)
+            {
+                client_ptr lazy_client = dc.get_min()->client;
+                utils::ensure(0, utils::is_zero,
+                              "Lazy client " + std::to_string(lazy_client->get_fd()) + " soon removed from epoll\n");
+
+                epoll_.remove_client(lazy_client); //stop listening
+                dc.remove(lazy_client->get_it());
+            }
         }
 
         //lets process all events
@@ -89,8 +93,7 @@ void echo_server::start()
             } else if (res.second[i].data.fd == epoll_.get_signal_fd())
             {
                 utils::ensure(0, utils::is_zero, "Server is closing because of a signal.\n");
-//                exit(0); //call destructor, which will delete client objects
-                throw server_exception("Caught signal");
+                throw server_exception("Caught signal"); //exception calls all the destructors, nice
             } //else if ((events[i].events & EPOLLIN) != 0)
 //            {
 //                // if client is ready to write data to us

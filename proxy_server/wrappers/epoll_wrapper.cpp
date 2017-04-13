@@ -32,7 +32,7 @@ epoll_wrapper::~epoll_wrapper()
     utils::ensure(close(signal_fd), utils::is_zero,
                   "Signal fd closed: " + std::to_string(signal_fd) + "\n");
 
-    delete events;
+    delete[] events;
 }
 
 int epoll_wrapper::get_fd()
