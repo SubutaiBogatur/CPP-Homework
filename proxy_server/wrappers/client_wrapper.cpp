@@ -50,14 +50,6 @@ client_wrapper::list_it client_wrapper::get_it()
     return it;
 }
 
-
-//void client_wrapper::init_it(std::list<timeout_wrapper>& queue, std::shared_ptr<client_wrapper> ptr_to_this)
-//{
-//    queue.push_back(timeout_wrapper(ptr_to_this));
-//    it = --queue.end();
-//}
-
-
 size_t client_wrapper::get_filled()
 {
     return st_buffer.filled;
@@ -73,24 +65,6 @@ bool client_wrapper::is_nasty(size_t buffer_size)
     return this->st_buffer.buffer_size - this->get_filled() < buffer_size;
 }
 
-//void client_wrapper::buffer_shl(size_t v)
-//{
-//    this->st_buffer.shl(v);
-//}
-//
-//client_wrapper::operator std::string()
-//{
-//    return std::to_string(fd);
-//}
-//
-//void client_wrapper::update_queue(std::list<timeout_wrapper>& queue, std::shared_ptr<client_wrapper> ptr_to_this)
-//{
-//    queue.erase(it);
-//    queue.push_back(timeout_wrapper(ptr_to_this));
-//    it = --queue.end();
-//}
-//
-
 ssize_t client_wrapper::read_from_client(size_t count)
 {
     ssize_t r = read(fd, (void *) (this->st_buffer.buffer + this->get_filled()),
@@ -101,7 +75,20 @@ ssize_t client_wrapper::read_from_client(size_t count)
     return r;
 }
 
-void client_wrapper::write_cl()
+void client_wrapper::test_write_to_client(int n)
+{
+    if (std::rand() % n == 0)
+    {
+        utils::ensure(0, utils::is_zero,
+                      "Attempt to write to client " + std::to_string(fd) + " failed. Buffer size is " +
+                      std::to_string(st_buffer.buffer_size) + " with " + std::to_string(st_buffer.filled) +
+                      " filled\n");
+        return;
+    }
+    write_to_client();
+}
+
+void client_wrapper::write_to_client()
 {
     ssize_t w = write(fd, (void *) this->st_buffer.buffer, this->get_filled());
     utils::ensure(w, utils::is_not_negative, "");

@@ -7,6 +7,7 @@
 
 #include "wrappers/epoll_wrapper.h"
 #include <cstdint>
+#include <map>
 
 struct echo_server
 {
@@ -16,12 +17,15 @@ public:
 private:
     static const uint16_t default_port = 8667;
     static const uint16_t default_max_clients = 16;
-    const size_t default_client_buffer_size = 16; //todo why can't static?
+    const size_t default_client_buffer_size = 64; //todo why can't static?
+    const size_t default_buffer_size = 16;
     static const int default_timeout = 10; //secs
 
     uint16_t port;
     epoll_wrapper epoll_;
     int server_fd;
+
+    std::map<int, client_ptr> all_clients; //map is needed to learn from epoll event what client is active
 
     void start_listening();
 

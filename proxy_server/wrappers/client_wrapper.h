@@ -101,7 +101,10 @@ public:
     ssize_t read_from_client(size_t count);
 
     //method writes buffer.filled bytes from buffer to fd. Then shl on buffer is made
-    void write_cl();
+    void write_to_client();
+
+    //method doesn't do write with probability 1/n. It is needed to test buffer overflowing
+    void test_write_to_client(int n);
 };
 
 
