@@ -10,6 +10,9 @@
 #include <exception>
 #include <string>
 
+/**
+ * @brief This exception is thrown, when an error or an unexpected situation during server runtime has happened
+ */
 struct server_exception : std::exception
 {
 public:

@@ -17,9 +17,9 @@
 echo_server::echo_server() : echo_server(default_port)
 {}
 
-echo_server::echo_server(uint16_t port)
+echo_server::echo_server(uint16_t portt)
 {
-    this->port = port;
+    this->port = portt;
     //create socket
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     utils::ensure(server_fd, utils::is_not_negative, "Server fd created " + std::to_string(server_fd) + "\n");
@@ -126,7 +126,7 @@ void echo_server::start()
                 //else client has woken up and is ready to read something from our storing buffer
                 client_ptr client = all_clients.at(res.second[i].data.fd);
 //                client->write_to_client();
-                client->test_write_to_client(3);
+                client->test_write_to_client(2);
                 client->set_it(dc.update(client->get_it(), time(0) + default_timeout));
             }
         }

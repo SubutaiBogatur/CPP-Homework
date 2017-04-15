@@ -11,7 +11,8 @@
 struct client_wrapper;
 
 /**
- * @brief Structure is needed to store upcoming deadlines.
+ * @brief Structure is needed to wrap deadline, timeout and ptr to client in one object,
+ * which will be stored in \c deadline_container
  */
 struct deadline_wrapper
 {

@@ -62,7 +62,7 @@ bool client_wrapper::is_buffer_empty()
 
 bool client_wrapper::is_nasty(size_t buffer_size)
 {
-    return this->st_buffer.buffer_size - this->get_filled() < buffer_size;
+    return this->st_buffer.buffer_size - this->get_filled() <= buffer_size;
 }
 
 ssize_t client_wrapper::read_from_client(size_t count)

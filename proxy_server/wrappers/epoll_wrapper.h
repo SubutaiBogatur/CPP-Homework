@@ -11,7 +11,7 @@
 struct client_wrapper;
 
 /**
- * Structure is needed to provide comfortable methods for dealing with epoll instance, also
+ * @brief Structure is needed to provide comfortable methods for dealing with epoll instance, also
  * it provides RAII idiom for it
  */
 struct epoll_wrapper

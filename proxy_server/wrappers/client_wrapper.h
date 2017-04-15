@@ -11,7 +11,7 @@
 #include <list>
 
 /**
- * Structure should be used to store every client of a server. It provides comfortable methods to
+ * @brief Structure should be used to store every client of a server. It provides comfortable methods to
  * do operations with clients
  */
 struct client_wrapper
