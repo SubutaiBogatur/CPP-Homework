@@ -4,6 +4,7 @@
 
 #include "deadline_container.h"
 #include "../utils/server_exception.h"
+#include "../utils/util_functions.h"
 #include <limits>
 #include <iostream>
 
@@ -103,6 +104,11 @@ void deadline_container::remove(deadline_container::list_iterator it)
 bool deadline_container::is_empty()
 {
     return timeouts.size() == 0;
+}
+
+deadline_container::~deadline_container()
+{
+    utils::ensure("Deadline container destructor called\n");
 }
 
 

@@ -16,7 +16,7 @@
 struct echo_server
 {
 private:
-    static const uint16_t default_port = 8667;
+    static const uint16_t default_port = 8668;
     static const uint16_t default_max_clients = 16;
     const size_t default_client_buffer_size = 64; //todo why can't be static?
     const size_t default_buffer_size = 16;
@@ -26,7 +26,6 @@ private:
     epoll_wrapper epoll_;
     int server_fd; //todo wrap
 
-    std::map<int, std::shared_ptr<echo_client>> all_clients; //map is needed to learn from epoll_event what client is active
 
     void start_listening();
 

@@ -56,6 +56,10 @@ void echo_server::start()
 
     deadline_container dc;
 
+    //todo very serious problem here detected. Map cannot be global because of order
+    //  destructor calls. Is order of calls defined? What do to?
+    std::map<int, std::shared_ptr<echo_client>> all_clients; //map is needed to learn from epoll_event what client is active
+
     while (true)
     {
         std::pair<int, epoll_event *> res = epoll_.start_sleeping(
@@ -86,7 +90,8 @@ void echo_server::start()
                 //todo ensure
                 all_clients.insert(
                         {client_fd,
-                         std::make_shared<echo_client>(client_fd, default_buffer_size, dc, default_timeout, epoll_)});
+                         std::make_shared<echo_client>(client_fd, default_client_buffer_size, dc, default_timeout,
+                                                       epoll_)});
             } else if (res.second[i].data.fd == epoll_.get_signal_fd())
             {
                 utils::ensure(0, utils::is_zero, "Server is closing because of a signal.\n");

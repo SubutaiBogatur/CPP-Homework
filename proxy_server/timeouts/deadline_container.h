@@ -97,6 +97,8 @@ public:
      * @brief returns true if there are no wrappers at all currently in container, \c O(1)
      */
     bool is_empty();
+
+    ~deadline_container();
 };
 
 #endif // TIMEOUT_CONTAINER_H
