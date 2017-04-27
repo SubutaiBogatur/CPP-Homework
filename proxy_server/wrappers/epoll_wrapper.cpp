@@ -5,10 +5,7 @@
 #include "../utils/util_functions.h"
 
 #include "epoll_wrapper.h"
-#include "client_wrapper.h"
 
-#include <sys/epoll.h>
-#include <string>
 #include <unistd.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -56,7 +53,7 @@ void epoll_wrapper::add_server(int server_fd)
                   "\n");
 }
 
-void epoll_wrapper::add_client(std::shared_ptr<client_wrapper> client)
+void epoll_wrapper::add_client(file_descriptor *client)
 {
     //set nonblocking
     utils::ensure(fcntl(client->get_fd(), F_SETFL,
@@ -108,7 +105,7 @@ std::pair<int, epoll_event *> epoll_wrapper::start_sleeping(int timeout)
     return {num, events};
 }
 
-void epoll_wrapper::remove_client(std::shared_ptr<client_wrapper> client)
+void epoll_wrapper::remove_client(file_descriptor *client)
 {
     utils::ensure(epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client->get_fd(), nullptr),
                   utils::is_zero, "Client " + std::to_string(client->get_fd()) + " removed from epoll\n");

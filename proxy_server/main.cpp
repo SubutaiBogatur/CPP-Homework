@@ -15,7 +15,7 @@ int main()
     {
         echo_server server;
         server.start();
-    } catch (server_exception e)
+    } catch (server_exception const& e)
     {
         std::cerr << e.what() << std::endl;
     }

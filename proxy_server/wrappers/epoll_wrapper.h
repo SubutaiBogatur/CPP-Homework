@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <sys/epoll.h>
+#include "file_descriptor.h"
 
 struct client_wrapper;
 
@@ -17,11 +18,11 @@ struct client_wrapper;
 struct epoll_wrapper
 {
 private:
-    static const uint16_t default_max_epoll_events = 16;
+    static const uint16_t default_max_epoll_events = 1024;
 
     int epoll_fd;
     int signal_fd; //todo probably it should be an optional not to close not existing and also not to add twice
-    epoll_event* events;
+    epoll_event *events;
 
 public:
     /**
@@ -30,7 +31,7 @@ public:
      */
     int get_fd();
 
-    
+
     int get_signal_fd();
 
     /**
@@ -49,17 +50,17 @@ public:
     void add_server(int server_fd);
 
     //method returns number of events occured, when got up
-    std::pair<int, epoll_event*> start_sleeping(int timeout);
+    std::pair<int, epoll_event *> start_sleeping(int timeout);
 
     /**
      * Method adds client to epoll. Now epoll waits for in, out events on it.
      * Added client is edge triggered (ie same events won't come twice)
      * @param client client to add
      */
-    void add_client(std::shared_ptr<client_wrapper> client);
+    void add_client(file_descriptor *client);
 
     //method removes client from epoll: events on it are not detected anymore
-    void remove_client(std::shared_ptr<client_wrapper> client);
+    void remove_client(file_descriptor *client);
 
     /**
      * Method adds \c signalfd to epoll. Signalfd is created inside the method and

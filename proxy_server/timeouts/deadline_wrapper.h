@@ -8,7 +8,7 @@
 #include <ctime>
 #include <memory>
 
-struct client_wrapper;
+struct file_descriptor;
 
 /**
  * @brief Structure is needed to wrap deadline, timeout and ptr to client in one object,
@@ -16,16 +16,18 @@ struct client_wrapper;
  */
 struct deadline_wrapper
 {
-    typedef std::shared_ptr<client_wrapper> client_ptr;
+    typedef file_descriptor *fd_ptr;
 
     int timeout;
     time_t deadline;
-    client_ptr client;
-//    int client; //todo debug only, fd instead of struct
+    fd_ptr client;
 
-//    deadline_wrapper(int timeout, time_t deadline, int client)
-    deadline_wrapper(int timeout, time_t deadline, client_ptr client)
+    deadline_wrapper(int timeout, time_t deadline, fd_ptr client)
             : timeout(timeout), deadline(deadline), client(client)
+    {}
+
+    deadline_wrapper(int timeout, fd_ptr client)
+            : timeout(timeout), deadline(std::time(nullptr) + timeout), client(client)
     {}
 };
 

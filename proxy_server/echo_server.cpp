@@ -4,8 +4,6 @@
 
 #include "utils/util_functions.h"
 #include "echo_server.h"
-#include "timeouts/deadline_container.h"
-#include "wrappers/client_wrapper.h"
 #include "utils/server_exception.h"
 
 #include <unistd.h>
@@ -71,13 +69,9 @@ void echo_server::start()
             //todo is it ok to delete all the clients in such a manner?
             while (!dc.is_empty() && dc.get_min()->deadline == expired_deadline)
             {
-                client_ptr lazy_client = dc.get_min()->client;
-                utils::ensure(0, utils::is_zero,
-                              "Lazy client " + std::to_string(lazy_client->get_fd()) + " soon removed from epoll\n");
-
-                epoll_.remove_client(lazy_client); //stop listening
-                dc.remove(lazy_client->get_it());
-                all_clients.erase(lazy_client->get_fd());
+                file_descriptor *lazy_client = dc.get_min()->client;
+                utils::ensure("Lazy client " + std::to_string(lazy_client->get_fd()) + " soon removed from server\n");
+                all_clients.erase(lazy_client->get_fd()); //huge improvement added here as exception safety
             }
         }
 
@@ -88,12 +82,11 @@ void echo_server::start()
             if (res.second[i].data.fd == server_fd)
             {
                 //for every new client memory is allocated
-                client_ptr client = std::make_shared<client_wrapper>(server_fd, this->default_client_buffer_size);
-                epoll_.add_client(client);
-                client->set_it(dc.add(default_timeout,
-                                      deadline_wrapper(default_timeout,
-                                                       default_timeout + std::time(nullptr), client)));
-                all_clients.insert({client->get_fd(), client});
+                int client_fd = accept(server_fd, nullptr, nullptr);
+                //todo ensure
+                all_clients.insert(
+                        {client_fd,
+                         std::make_shared<echo_client>(client_fd, default_buffer_size, dc, default_timeout, epoll_)});
             } else if (res.second[i].data.fd == epoll_.get_signal_fd())
             {
                 utils::ensure(0, utils::is_zero, "Server is closing because of a signal.\n");
@@ -101,33 +94,27 @@ void echo_server::start()
             } else if ((res.second[i].events & EPOLLIN) != 0)
             {
                 // if client is ready to write data to us
-                client_ptr client = all_clients.at(res.second[i].data.fd);
+                std::shared_ptr<echo_client> client = all_clients.at(res.second[i].data.fd);
 
                 if (client->is_nasty(default_buffer_size) || client->read_from_client(default_buffer_size) == 0)
                 {
-                    utils::ensure(0, utils::is_zero,
-                                  client->is_nasty(default_buffer_size) ? "Nasty client " +
-                                                                          std::to_string(client->get_fd()) +
-                                                                          " soon will be removed\n"
-                                                                        : "Client " + std::to_string(client->get_fd()) +
-                                                                          " disconnected from the server\n");
-                    epoll_.remove_client(client); //stop listening
-                    dc.remove(client->get_it());
-                    all_clients.erase(client->get_fd());
+                    utils::ensure(client->is_nasty(default_buffer_size)
+                                  ? "Nasty client " + std::to_string(client->get_fd()) + " soon will be removed\n"
+                                  : "Client " + std::to_string(client->get_fd()) + " disconnected from the server\n");
+                    all_clients.erase(
+                            client->get_fd()); //when erasing destructor is called and cl is rm also from dc and epoll
                     continue;
                 }
 
                 //if successfully read from client, add it to write to it
                 res.second[res.first].events = EPOLLOUT; //write can be done
                 res.second[res.first++].data.fd = client->get_fd();
-                client->set_it(dc.update(client->get_it(), time(0) + default_timeout));
             } else if ((res.second[i].events & EPOLLOUT) != 0)
             {
                 //else client has woken up and is ready to read something from our storing buffer
-                client_ptr client = all_clients.at(res.second[i].data.fd);
-//                client->write_to_client();
-                client->test_write_to_client(2);
-                client->set_it(dc.update(client->get_it(), time(0) + default_timeout));
+                std::shared_ptr<echo_client> client = all_clients.at(res.second[i].data.fd);
+                client->write_to_client();
+//                client->test_write_to_client(2);
             }
         }
     }
