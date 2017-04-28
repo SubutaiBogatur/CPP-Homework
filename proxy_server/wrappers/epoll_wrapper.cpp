@@ -70,6 +70,11 @@ void epoll_wrapper::add_client(file_descriptor *client)
 
 void epoll_wrapper::add_signal_handling()
 {
+    if (signal_fd)
+    {
+        throw server_exception("Adding signal handling more than once is not allowed, it seems meaningless");
+    }
+
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, SIGTERM);
