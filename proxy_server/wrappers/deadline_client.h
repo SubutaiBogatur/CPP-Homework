@@ -26,6 +26,8 @@ public:
     deadline_client(int fd, size_t buffer_size, deadline_container& dc, int timeout);
     ~deadline_client();
 
+    void change_timeout(int new_timeout);
+
     //methods do the same as in parent, but also update dc
     virtual ssize_t read_from_client(size_t count);
     virtual void write_to_client();

@@ -8,6 +8,7 @@
 #include <memory>
 #include <sys/epoll.h>
 #include "file_descriptor.h"
+#include <experimental/optional>
 
 struct client_wrapper;
 
@@ -20,29 +21,26 @@ struct epoll_wrapper
 private:
     static const uint16_t default_max_epoll_events = 1024;
 
-    int epoll_fd;
-    int signal_fd; //todo probably it should be an optional not to close not existing and also not to add twice
+    file_descriptor epoll_fd;
+
+    //it is optional because some users might not want to use custom signal handling
+    std::experimental::optional<file_descriptor> signal_fd;
+
     epoll_event *events;
 
 public:
+    ~epoll_wrapper();
+
     /**
-     * Method returns \c epoll_fd
-     * @return
+     * pre:
+     * signal_fd is present
      */
-    int get_fd();
-
-
     int get_signal_fd();
 
     /**
      * Constructor creates new epoll instance using syscall. Its \c fd is saved in \c epoll_fd field
      */
     epoll_wrapper();
-
-    /**
-     * Destructor closes \c epoll_fd and \c signal_fd
-     */
-    ~epoll_wrapper();
 
     /**
      * Method adds listening socket to epoll, listening to \c EPOLLIN events on it (listening for new clients)
@@ -67,7 +65,7 @@ public:
      * \c SIGTERM and \c SIGINT signals will be catched by that fd. Signalfd is
      * added to epoll and now epoll listens to signals catched by that fd
      *
-     * Method should be called only once. //todo optional, what if twice,
+     * Method should be called only once, exception is thrown if twice
      * todo add method with custom signals
      */
     void add_signal_handling();

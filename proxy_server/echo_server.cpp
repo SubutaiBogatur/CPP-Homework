@@ -15,53 +15,51 @@
 echo_server::echo_server() : echo_server(default_port)
 {}
 
-echo_server::echo_server(uint16_t portt)
+echo_server::echo_server(uint16_t portt) : server_fd(file_descriptor(socket(AF_INET, SOCK_STREAM, 0)))
 {
-    this->port = portt;
-    //create socket
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    utils::ensure(server_fd, utils::is_not_negative, "Server fd created " + std::to_string(server_fd) + "\n");
+    utils::ensure(server_fd.get_fd(), utils::is_not_negative,
+                  "Server fd created " + std::to_string(server_fd.get_fd()) + "\n");
 
-    //todo mb we can encounter problem here, if server opened, but failed on bind and as a result fd not closed
-    //  because exception is thrown from constructor
+    this->port = portt;
+
     //todo mb also problem if creating epoll with constructor, it fails, what happens here then?
     //bind socket to port
     sockaddr_in addr; //struct describing internet address
     addr.sin_family = AF_INET; //using ipv4
     addr.sin_port = htons(port); //select port
     addr.sin_addr.s_addr = htonl(INADDR_ANY); //listen to all ips
-    utils::ensure(bind(server_fd, (sockaddr *) &addr, sizeof(sockaddr)),
+    utils::ensure(bind(server_fd.get_fd(), (sockaddr *) &addr, sizeof(sockaddr)),
                   utils::is_zero, "Binded to port " + std::to_string(port) + "\n");
-
 }
 
 echo_server::~echo_server()
 {
-    utils::ensure(close(server_fd), utils::is_zero,
-                  "Server fd closed: " + std::to_string(server_fd) + "\n");
+    utils::ensure("Server destructor called\n");
 }
 
 //todo mb smhw custom max clients if needed
 void echo_server::start_listening()
 {
-    utils::ensure(listen(server_fd, default_max_clients), utils::is_zero,
-                  "Socket " + std::to_string(server_fd) + " is in listening state\n");
+    utils::ensure(listen(server_fd.get_fd(), default_max_clients), utils::is_zero,
+                  "Socket " + std::to_string(server_fd.get_fd()) + " is in listening state\n");
 }
 
 void echo_server::start()
 {
     start_listening();
-    epoll_.add_server(server_fd); //server_fd listening for EPOLLIN
+    epoll_.add_server(server_fd.get_fd()); //server_fd listening for EPOLLIN
     epoll_.add_signal_handling();
 
     deadline_container dc;
 
     //todo very serious problem here detected. Map cannot be global because of order
     //  destructor calls. Is order of calls defined? What do to?
+    //This map is the only dogma, the source of truth
     std::map<int, std::shared_ptr<echo_client>> all_clients; //map is needed to learn from epoll_event what client is active
 
     while (true)
     {
+        //res contains pair: (number of events, array of events)
         std::pair<int, epoll_event *> res = epoll_.start_sleeping(
                 dc.is_empty() ? -1 : static_cast<int>(dc.get_min()->deadline - std::time(nullptr)));
 
@@ -75,7 +73,8 @@ void echo_server::start()
             {
                 file_descriptor *lazy_client = dc.get_min()->client;
                 utils::ensure("Lazy client " + std::to_string(lazy_client->get_fd()) + " soon removed from server\n");
-                all_clients.erase(lazy_client->get_fd()); //huge improvement added here as exception safety
+                all_clients.erase(lazy_client->get_fd()); //huge improvement added here. For advanced exception safety
+                //  removing client from the only place
             }
         }
 
@@ -83,15 +82,15 @@ void echo_server::start()
         for (int i = 0; i < res.first; i++)
         {
             //if event has happened on server
-            if (res.second[i].data.fd == server_fd)
+            if (res.second[i].data.fd == server_fd.get_fd())
             {
                 //for every new client memory is allocated
-                int client_fd = accept(server_fd, nullptr, nullptr);
-                //todo ensure
+                int client_fd = accept(server_fd.get_fd(), nullptr, nullptr);
+                utils::ensure(client_fd, utils::is_not_negative,
+                              "New client accepted: " + std::to_string(client_fd) + " and soon wrapped\n");
                 all_clients.insert(
-                        {client_fd,
-                         std::make_shared<echo_client>(client_fd, default_client_buffer_size, dc, default_timeout,
-                                                       epoll_)});
+                        {client_fd, std::make_shared<echo_client>(
+                                client_fd, default_client_buffer_size, dc, default_timeout, epoll_)});
             } else if (res.second[i].data.fd == epoll_.get_signal_fd())
             {
                 utils::ensure(0, utils::is_zero, "Server is closing because of a signal.\n");
@@ -106,8 +105,9 @@ void echo_server::start()
                     utils::ensure(client->is_nasty(default_buffer_size)
                                   ? "Nasty client " + std::to_string(client->get_fd()) + " soon will be removed\n"
                                   : "Client " + std::to_string(client->get_fd()) + " disconnected from the server\n");
-                    all_clients.erase(
-                            client->get_fd()); //when erasing destructor is called and cl is rm also from dc and epoll
+
+                    //when erasing from map, destructor is called and client is also removed from dc and epoll_
+                    all_clients.erase(client->get_fd());
                     continue;
                 }
 
@@ -118,8 +118,8 @@ void echo_server::start()
             {
                 //else client has woken up and is ready to read something from our storing buffer
                 std::shared_ptr<echo_client> client = all_clients.at(res.second[i].data.fd);
-                client->write_to_client();
-//                client->test_write_to_client(2);
+//                client->write_to_client();
+                client->test_write_to_client(2);
             }
         }
     }

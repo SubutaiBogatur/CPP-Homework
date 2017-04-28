@@ -27,3 +27,8 @@ deadline_client::~deadline_client()
 {
     dc.remove(it);
 }
+
+void deadline_client::change_timeout(int new_timeout)
+{
+    this->timeout = new_timeout;
+}
