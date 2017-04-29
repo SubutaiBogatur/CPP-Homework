@@ -155,23 +155,50 @@ uint32_t count_words(std::string const& str)
     return ans;
 } 
 
-void do_tests(size_t num = 50000)
+void do_tests(size_t num = 500)
 {
-    std::srand(std::time(0));
-    std::cout << std::time(0) << std::endl;
+    time_t seed = std::time(0);
+    std::cerr << "Seed: " << seed << std::endl;
+    std::srand(seed);
+
+    clock_t slow_clocks = 0, fast_clocks = 0;
+
+    int visualization_step = num / 100;
+    int prev_step = 0;
+
+    std::cerr << "0% done\n";
+
     for(size_t i = 0; i < num; i++)
     {
-        std::string str = get_random_string(1e5, 2e8, 2);
-        // std::cerr << "New string:\n" << str << std::endl << std::endl;
-        uint32_t fast_ans = count_words(str);
-        uint32_t slow_ans = count_words_slowly(str);
+        if (i == prev_step + visualization_step)
+        {
+            prev_step = i;
+            std::cerr << prev_step / visualization_step << "% done\n";
+        }
 
-        std::cerr << "Slow ans: " << slow_ans << ", fast ans: " << fast_ans << std::endl; 
+        std::string str = get_random_string(1e5, 2e6, 2);
+
+        LOG("Current test: " + str + "\n");
+
+        clock_t begin = clock();
+        uint32_t fast_ans = count_words(str);
+        fast_clocks += (clock() - begin);
+
+        begin = clock();
+        uint32_t slow_ans = count_words_slowly(str);
+        slow_clocks += (clock() - begin);
+
+        LOG("Slow ans: " + std::to_string(slow_ans) + ", fast ans: " + std::to_string(fast_ans) + "\n"); 
+
         if(slow_ans != fast_ans)
         {
             std::cin >> str;
         }
     }
+    std::cerr << num << " tests done, my congratulations.\n" 
+    << "Fast counter has taken " << ((double)fast_clocks) / CLOCKS_PER_SEC 
+    << ", while slow: " << ((double)slow_clocks) / CLOCKS_PER_SEC << ".\n" 
+    << "Optimized code is " << (double) slow_clocks / (double) fast_clocks << " times faster\n";
 }
 
 void generate_large_input()
@@ -201,8 +228,8 @@ int main()
         std::string str_strange("wwwwwww        wwwwwwwwwww ww www        www w wwwww     ww ww www        www w wwwww");
         std::string str_strange1("aaaaaaaaaa _aaaaaaaaaaaaaaaaaaaa");
 
-        //do_tests(1000);
-        measure_time(true, 1);
+        do_tests();
+        //measure_time(true, 1);
         // count_words(str);
         return 0;
 }
