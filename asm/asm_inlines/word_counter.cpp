@@ -155,7 +155,7 @@ uint32_t count_words(std::string const& str)
     return ans;
 } 
 
-void do_tests(size_t num = 500)
+void do_tests(size_t num = 200)
 {
     time_t seed = std::time(0);
     std::cerr << "Seed: " << seed << std::endl;
@@ -176,7 +176,7 @@ void do_tests(size_t num = 500)
             std::cerr << prev_step / visualization_step << "% done\n";
         }
 
-        std::string str = get_random_string(1e5, 2e6, 2);
+        std::string str = get_random_string(1e5, 1e6, 2);
 
         LOG("Current test: " + str + "\n");
 
@@ -230,6 +230,6 @@ int main()
 
         do_tests();
         //measure_time(true, 1);
-        // count_words(str);
+        //count_words(str);
         return 0;
 }

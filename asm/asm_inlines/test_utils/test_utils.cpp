@@ -37,3 +37,15 @@ uint32_t count_words_slowly(std::string const& str)
 
 	return ret;
 }
+
+bool check_equality_memcpy(void const* buffer1, void const* buffer2, size_t size)
+{
+	for(size_t i = 0; i < size; i++)
+	{
+		if(*((char*) buffer1 + i) != *((char*) buffer2 + i))
+		{
+			return false;
+		}
+	}
+	return true;
+}

@@ -13,5 +13,7 @@ std::string get_random_string(size_t min_len = 5, size_t max_len = 50, size_t nu
 
 uint32_t count_words_slowly(std::string const& str);
 
+bool check_equality_memcpy(void const* buffer1, void const* buffer2, size_t size);
+
 
 #endif //TEST_UTILS
