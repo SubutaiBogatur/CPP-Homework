@@ -36,11 +36,12 @@ void vectorized_memcpy(void *dst, void const *src, size_t size)
 	for(size_t i = offset; i < size - end_of_vectorization; i += 16)	
 	{
 		__m128i tmp;
-		__asm__ (
+		__asm__ volatile (
 		"movdqu (%1), %0\n"
 		"movntdq %0, (%2)\n"
 		:"=x"(tmp) //to specify register size explicitly
-		:"r"((char *)src + i), "r"((char *)dst + i));
+		:"r"((char *)src + i), "r"((char *)dst + i)
+		:"memory");
 	}
 
 	for (size_t i = size - end_of_vectorization; i < size; i++)
