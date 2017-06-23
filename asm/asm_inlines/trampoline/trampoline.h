@@ -1,93 +1,10 @@
 #ifndef TRAMPOLINE_H
 #define TRAMPOLINE_H
 
-#include <xmmintrin.h>
+#include "argument_types.h"
+#include "allocator.h"
 #include <stdlib.h>
 #include <sys/mman.h>
-
-// TODO: memory alloc and reusing
-// pointers
-// assembler commands...
-// swap/ operator=() etc..
-
-
-template <typename ... Args>
-struct args_types;
-
-template <>
-struct args_types<>
-{
-    static const int INTEGER = 0;
-    static const int SSE = 0;
-};
-
-template <typename First, typename ... Args>
-struct args_types<First, Args ...>
-{
-    static const int INTEGER = args_types<Args ...>::INTEGER + 1;
-    static const int SSE = args_types<Args ...>::SSE;
-};
-
-template <typename ... Args>
-struct args_types<float, Args ...>
-{
-    static const int INTEGER = args_types<Args ...>::INTEGER;
-    static const int SSE = args_types<Args ...>::SSE + 1;
-};
-
-template <typename ... Args>
-struct args_types<double, Args ...>
-{
-    static const int INTEGER = args_types<Args ...>::INTEGER;
-    static const int SSE = args_types<Args ...>::SSE + 1;
-};
-
-template <typename ... Args>
-struct args_types<__m64, Args ...>
-{
-    static const int INTEGER = args_types<Args ...>::INTEGER;
-    static const int SSE = args_types<Args ...>::SSE + 1;
-};
-
-
-namespace
-{
-    void** p = nullptr;
-    const int SIZE = 123;
-    const int PAGES_AMOUNT = 1;
-    const int PAGE_SIZE = 4096;
-
-    void alloc() {
-        void* mem = mmap(nullptr, PAGE_SIZE * PAGES_AMOUNT,
-                         PROT_EXEC | PROT_READ | PROT_WRITE,
-                         MAP_PRIVATE | MAP_ANONYMOUS,
-                         -1, 0);
-        p = (void**) mem;
-        if (mem != nullptr) {
-            for (auto i = 0; i < PAGE_SIZE * PAGES_AMOUNT; i += SIZE) {
-                auto tmp = (char*)mem + i;
-                *(void**)tmp = 0;
-                if (i != 0) *(void**)(tmp - SIZE) = tmp;
-            }
-        }
-    }
-
-    void* malloc_ptr() {
-        if (p == nullptr) {
-            alloc();
-            if (p == nullptr) return nullptr;
-        }
-        void* ans = p;
-        p = (void**)*p;
-        return ans;
-    }
-
-    void free_ptr(void* ptr) {
-        *(void**) ptr = p;
-        p = (void**) ptr;
-    }
-}
-
 
 template <typename T>
 struct trampoline;
@@ -118,13 +35,14 @@ public:
     template <typename F>
     trampoline(F func) : func_obj(new F(std::move(func))), deleter(my_deleter<F>)
     {
-        code = malloc_ptr();
+        code = allocator::get_instance().malloc();
         char* pcode = (char*)code;
 
         if (args_types<Args ...>::INTEGER < 6)
         {
             /* shift each param for the next free register */
-            for (int i = args_types<Args ...>::INTEGER - 1; i >= 0; i--) add(pcode, shifts[i]);
+            for (int i = args_types<Args ...>::INTEGER - 1; i >=0 ; i--) add(pcode, shifts[i]);
+
             add(pcode,"\x48\xbf");
             *(void**)pcode = func_obj; //mov rdi, imm
             pcode += 8;
@@ -274,7 +192,7 @@ public:
     ~trampoline()
     {
         if (func_obj) deleter(func_obj);
-        free_ptr(code);
+        allocator::get_instance().free(code);
     }
 
 private:

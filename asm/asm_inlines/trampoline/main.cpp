@@ -191,9 +191,9 @@ void test_constructors()
 int main()
 {
 //    tes();
-//    test_multipal_types_less_six_args();
-//    test_multipal_types_more_five_args_simple();
-//    test_multipal_types_more_five_args();
+    test_multipal_types_less_six_args();
+    test_multipal_types_more_five_args_simple();
+    test_multipal_types_more_five_args();
     test_constructors();
     return 0;
 }
