@@ -5,8 +5,6 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 
-
-
 // TODO: memory alloc and reusing
 // pointers
 // assembler commands...
@@ -91,15 +89,11 @@ namespace
 }
 
 
-
 template <typename T>
-struct trampoline
-{
-    template <typename F>
-    trampoline(F func) {}
-    trampoline(const trampoline&) = delete;
-    T* get() const;
-};
+struct trampoline;
+
+template<typename T, typename ... Args>
+void swap(trampoline<T (Args...)>& a, trampoline<T (Args...)>& b);
 
 template <typename T, typename ... Args>
 struct trampoline<T (Args ...)>
@@ -189,20 +183,16 @@ public:
 
             /*----------------- shifting argument -------------------*/
             {
-                // rsp point to free place, set it to arg we want to shift\
-                add rsp,
+                // rsp point to free place, set it to arg we want to shift add rsp,
                 add(pcode,"\x48\x81\xc4\x08");
                 pcode += 3;
-                // save arg we want to shift in rdi, it was free before this\
-                mov rdi,[rsp]
+                // save arg we want to shift in rdi, it was free before this mov rdi,[rsp]
                 add(pcode, "\x48\x8b\x3c\x24");
 
-                // shift arg by pusing saved in rdi argument onto free place on stack\
-                mov [rsp-0x8],rdi
+                // shift arg by pusing saved in rdi argument onto free place on stack mov [rsp-0x8],rdi
                 add(pcode, "\x48\x89\x7c\x24\xf8");
 
-                // jupm cause need to shift all args in cycle\
-                jmp
+                // jupm cause need to shift all args in cycle jmp
                 add(pcode, "\xeb");
                 *pcode = label_1 - pcode - 1;
                 pcode++;
@@ -211,12 +201,10 @@ public:
 
             /*----------- working with rsp, calling function ----------*/
 
-            //move saved in r11 return adress onto the free place\
-            mov [rsp],r11
+            //move saved in r11 return adress onto the free place mov [rsp],r11
             add(pcode, "\x4c\x89\x1c\x24");
 
-            //update rsp\
-            sub rsp,...
+            //update rsp sub rsp,...
             add(pcode,"\x48\x81\xec");
             *(int32_t*)pcode = stack_size;
             pcode += 4;
@@ -231,8 +219,7 @@ public:
             *(void**)pcode = (void*)&do_call<F>;
             pcode += 8;
 
-            // calling function, in rax\
-            call rax
+            // calling function, in rax call rax
             add(pcode,"\xff\xd0");
 
             // removing 6'th arg from stack
@@ -240,15 +227,12 @@ public:
 
             /* updating rsp */
 
-                //saving into r11 adress of current rsp plus shift on curent size of stack\
-                have one less argument in stack cause of one arument have already been deleted from stack\
-                mov r11,[rsp+const]
+                //saving into r11 adress of current rsp plus shift on curent size of stack have one less argument in stack cause of one arument have already been deleted from stack mov r11,[rsp+const]
                 add(pcode,"\x4c\x8b\x9c\x24");
                 *(int32_t*)pcode = stack_size - 8;
                 pcode += 4;
 
-                //set corrrect value previously stored in r11 to rsp\
-                mov [rsp],r11
+                //set corrrect value previously stored in r11 to rsp mov [rsp],r11
                 add(pcode, "\x4c\x89\x1c\x24");
 
 
@@ -266,7 +250,29 @@ public:
         return (T(*)(Args ... args))code;
     }
 
-    ~trampoline() {
+    trampoline& operator=(const trampoline& other) = delete;
+    trampoline& operator=(trampoline&& other)
+    {
+        std::cout << "in = constructor\n";
+        trampoline tmp(std::move(other));
+        swap(*this, tmp);
+        return *this;
+    }
+
+    trampoline(const trampoline& other) = delete;
+    trampoline(trampoline&& other)
+    {
+        std::cout << "in move constructor\n";
+        func_obj = other.func_obj;
+        code = other.code;
+        deleter = other.deleter;
+        other.func_obj = nullptr;
+    }
+
+    friend void swap<>(trampoline& a, trampoline& b);
+
+    ~trampoline()
+    {
         if (func_obj) deleter(func_obj);
         free_ptr(code);
     }
@@ -281,5 +287,13 @@ private:
         delete static_cast<F*>(func_obj);
     }
 };
+
+template<typename T, typename... Args>
+void swap(trampoline<T (Args...)>& a, trampoline<T (Args...)>& b)
+{
+    std::swap(a.func_object, b.func_object);
+    std::swap(a.code, b.code);
+    std::swap(a.deleter, b.deleter);
+}
 
 #endif

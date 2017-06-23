@@ -180,11 +180,20 @@ void test_multipal_types_more_five_args() {
     cout << "Test 3 PASSED" << endl << endl;
 }
 
+void test_constructors()
+{
+    trampoline<int(int)> tr([](int a){return a * 2;});
+    trampoline<int(int)> trr(std::move(tr));
+    std::cout << tr.get()(2);
+    std::cout << trr.get()(2);
+}
+
 int main()
 {
 //    tes();
 //    test_multipal_types_less_six_args();
 //    test_multipal_types_more_five_args_simple();
-    test_multipal_types_more_five_args();
+//    test_multipal_types_more_five_args();
+    test_constructors();
     return 0;
 }
