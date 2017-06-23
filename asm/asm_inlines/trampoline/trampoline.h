@@ -1,10 +1,10 @@
 #ifndef TRAMPOLINE_H
 #define TRAMPOLINE_H
 
-#include "argument_types.h"
-#include "allocator.h"
 #include <string>
 #include <iostream>
+#include "argument_types.h"
+#include "allocator.h"
 
 template <typename T>
 struct trampoline;
@@ -30,8 +30,6 @@ private:
             int32_t i;
         };
         size_t size;
-
-
 
         imm(void *addr, size_t size):size(size), addr(addr){}
         imm(int32_t i, size_t size):size(size), i(i){}
@@ -86,15 +84,14 @@ public:
             // shift all the arguments
             for (int i = args_types<Args ...>::INTEGER - 1; i >=0 ; i--) add(shifts[i]);
 
-            add("\x48\xbf", imm(func_obj, 8),                   // mov rdi, ptr_to_func_obj
-                "\x48\xb8", imm((void *)&do_call<F>, 8),        // mov rax, address_of_do_call
-                "\xff\xe0");                                    // jmp rax
+            add("\x48\xbf", imm(func_obj, 8),                   // mov  rdi, ptr_to_func_obj
+                "\x48\xb8", imm((void *)&do_call<F>, 8),        // mov  rax, address_of_do_call
+                "\xff\xe0");                                    // jmp  rax
         }
         else
         {
-
             // save return address, which is in on top of stack
-            add("\x4c\x8b\x1c\x24");                            //mov r11 [rsp]
+            add("\x4c\x8b\x1c\x24");                            // mov  r11 [rsp]
 
             // shift all the args and push last to the stack
             for (int i = 5 ; i >= 0; i--) add(shifts[i]);
@@ -103,72 +100,32 @@ public:
             int stack_size = 8 * (args_types<Args ...>::INTEGER - 5 + std::max(args_types<Args ...>::SSE - 8, 0));
 
             // now let's get stack ready for new call
-            add("\x48\x89\xe0",                                 //mov rax, rsp
-                "\x48\x05", imm(stack_size, 4),                 //add rax, stack_size
-                "\x48\x81\xc4", imm(8, 4));                     //add rsp, 8
+            add("\x48\x89\xe0",                                 // mov  rax, rsp
+                "\x48\x05", imm(stack_size, 4),                 // add  rax, stack_size
+                "\x48\x81\xc4", imm(8, 4));                     // add  rsp, 8
 
             char* label_1 = ip; //cycle for shifting
 
-            add("\x48\x39\xe0",                                 //cmp rax, rsp
-                "\x74\x13");                                    //je 13  (*sorry very much, but this does mean jumping 13 bytes lower*)
-            add( "\x48");
+            add("\x48\x39\xe0",                                 // cmp  rax, rsp
+                "\x74\x12",                                     // je   12            (*sorry very much, it does jumping 12 lines below *)
+                "\x48\x81\xc4", imm(8, 4),                      // add  rsp, 0x00000008
+                "\x48\x8b\x3c\x24",                             // mov  rdi, [rsp]
+                "\x48\x89\x7c\x24\xf8",                         // mov  [rsp - 8], rdi
+                "\xeb");                                        // jmp  label_1
+            *ip = label_1 - ip++ - 1; //placing label wher to jump
 
+            //now all args in stack are shifted:
+            add("\x4c\x89\x1c\x24",                             // mov  [rsp], r11
+                "\x48\x81\xec", imm(stack_size, 4),             // sub  rsp, stack_size
+                "\x48\xbf", imm(func_obj, 8),                   // mov  rdi, func_obj
+                "\x48\xb8", imm((void *)&do_call<F>, 8),        // mov  rax, address_of_do_call
+                "\xff\xd0");                                    // call rax             (*let's do what this all was for*)
 
-            /*----------------- shifting argument -------------------*/
-            {
-                // rsp point to free place, set it to arg we want to shift add rsp,
-                add("\x48\x81\xc4\x08");
-                ip += 3;
-                // save arg we want to shift in rdi, it was free before this mov rdi,[rsp]
-                add( "\x48\x8b\x3c\x24",
-                     "\x48\x89\x7c\x24\xf8");
-
-                // jupm cause need to shift all args in cycle jmp
-                add( "\xeb");
-                *ip = label_1 - ip - 1;
-                ip++;
-            }
-//            *label_2 = ip - label_2 - 1;
-
-            /*----------- working with rsp, calling function ----------*/
-
-            //move saved in r11 return adress onto the free place mov [rsp],r11
-            add( "\x4c\x89\x1c\x24");
-
-            //update rsp sub rsp,...
-            add("\x48\x81\xec");
-            *(int32_t*)ip = stack_size;
-            ip += 4;
-
-            /*  move executing function ptr to the first register */
-            add("\x48\xbf");
-            *(void**)ip = func_obj;
-            ip += 8;
-
-            /* set ret function ptr */
-            add( "\x48\xb8");
-            *(void**)ip = (void*)&do_call<F>;
-            ip += 8;
-
-            // calling function, in rax call rax
-            add("\xff\xd0");
-
-            // removing 6'th arg from stack
-            add("\x41\x59");
-
-            /* updating rsp */
-
-                //saving into r11 adress of current rsp plus shift on curent size of stack have one less argument in stack cause of one arument have already been deleted from stack mov r11,[rsp+const]
-                add("\x4c\x8b\x9c\x24");
-                *(int32_t*)ip = stack_size - 8;
-                ip += 4;
-
-                //set corrrect value previously stored in r11 to rsp mov [rsp],r11
-                add( "\x4c\x89\x1c\x24");
-
-
-            /* FINALLY RETURN */
-            add("\xc3");
+            //function called, mission completed. Now let's restore previous state of stack, here hack is used
+            add("\x41\x59",                                     // pop   r9
+                "\x4c\x8b\x9c\x24", imm(stack_size - 8, 4),     // mov   r11, [rsp + stack_size - 8]
+                "\x4c\x89\x1c\x24",                             // mov   [rsp], r11
+                "\xc3");                                        // ret           (* returning to base, comanches *)
         }
     }
 
@@ -193,7 +150,6 @@ public:
     trampoline(const trampoline& other) = delete;
     trampoline(trampoline&& other)
     {
-        std::cout << "in move constructor\n";
         func_obj = other.func_obj;
         page = other.page;
         deleter = other.deleter;

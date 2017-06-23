@@ -23,14 +23,6 @@ void test_base() {
     cout << "Test 0 PASSED" << endl << endl;
 }
 
-void test_ptr() {
-    cout << "Test 1 started" << endl;
-//    std::function<char *()> fun([](){std::shared_ptr<char> sh_ptr = std::make_shared<char>(); *sh_ptr = 'a'; return sh_ptr.get()});
-//    std::function<char *()> fun = [](){return (new char);};
-//    std::function<void()> f_display_42 = []() { print_num(42); };
-
-}
-
 void test_multipal_types_less_six_args() {
 
     cout << "Test 1 started" << endl;
@@ -173,8 +165,8 @@ void test_multipal_types_more_five_args() {
         }
         int sz = fun(&v[0], &v[1], &v[2], &v[3], &v[4], &v[5], v[6], &v[7], v[8]);
         int tr_sz = trampoline<int(st *c1, st *c2, st *c3, st *c4, st *c5, st *c6, st& c7, st *c8, st& c9)>(fun)
-                .get()(&v[0], &v[0], &v[0], &v[0], &v[0], &v[0], v[1], &v[0], v[1]);
-//        assert(concat_sufarr == tr_res);
+                .get()(&v[0], &v[1], &v[2], &v[3], &v[4], &v[5], v[6], &v[7], v[8]);
+        assert(sz == tr_sz);
 
     }
     cout << "Test 3 PASSED" << endl << endl;
@@ -190,7 +182,7 @@ void test_constructors()
 
 int main()
 {
-//    tes();
+    test_base();
     test_multipal_types_less_six_args();
     test_multipal_types_more_five_args_simple();
     test_multipal_types_more_five_args();
