@@ -176,8 +176,8 @@ void test_constructors()
 {
     trampoline<int(int)> tr([](int a){return a * 2;});
     trampoline<int(int)> trr(std::move(tr));
-    std::cout << tr.get()(2);
-    std::cout << trr.get()(2);
+//    std::cout << tr.get()(2);
+//    std::cout << trr.get()(2);
 }
 
 int main()

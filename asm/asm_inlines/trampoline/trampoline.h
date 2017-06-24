@@ -47,9 +47,12 @@ private:
     //function to add instructions
     void add() {}
 
-    void add(std::string command)
+    void add(std::string const& command)
     {
-        for (const char *i = command.c_str(); *i; i++) *(ip++) = *i;
+        for (const char *i = command.c_str(); i < command.c_str() + command.size(); i++)
+        {
+            *(ip++) = *i;
+        }
     }
 
     void add(imm im)
@@ -58,18 +61,11 @@ private:
         ip += im.size;
     }
 
-    template<typename ... A>
-    void add(std::string str, A... args)
+    template<typename A0, typename A1, typename ... A>
+    void add(A0 str, A1 a1, A... args)
     {
         add(str);
-        add(args...);
-    }
-
-    template<typename ... A>
-    void add(imm im, A... args)
-    {
-        add(im);
-        add(args...);
+        add(a1, args...);
     }
 
 public:
@@ -112,7 +108,7 @@ public:
                 "\x48\x8b\x3c\x24",                             // mov  rdi, [rsp]
                 "\x48\x89\x7c\x24\xf8",                         // mov  [rsp - 8], rdi
                 "\xeb");                                        // jmp  label_1
-            *ip = label_1 - ip++ - 1; //placing label wher to jump
+            *ip = label_1 - ip++ - 1; //placing label where to jump
 
             //now all args in stack are shifted:
             add("\x4c\x89\x1c\x24",                             // mov  [rsp], r11
@@ -165,8 +161,6 @@ public:
     }
 
 private:
-
-
     template <typename F>
     static void my_deleter(void* func_obj) {
         delete static_cast<F*>(func_obj);
