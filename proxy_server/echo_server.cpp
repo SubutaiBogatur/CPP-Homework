@@ -17,12 +17,12 @@ echo_server::echo_server() : echo_server(default_port)
 
 echo_server::echo_server(uint16_t portt) : server_fd(file_descriptor(socket(AF_INET, SOCK_STREAM, 0)))
 {
+    //in the beginning epoll constructor is called with empty argument list
     utils::ensure(server_fd.get_fd(), utils::is_not_negative,
                   "Server fd created " + std::to_string(server_fd.get_fd()) + "\n");
 
     this->port = portt;
 
-    //todo mb also problem if creating epoll with constructor, it fails, what happens here then?
     //bind socket to port
     sockaddr_in addr; //struct describing internet address
     addr.sin_family = AF_INET; //using ipv4
@@ -47,13 +47,11 @@ void echo_server::start_listening()
 void echo_server::start()
 {
     start_listening();
-    epoll_.add_server(server_fd.get_fd()); //server_fd listening for EPOLLIN
+    epoll_.add_server(&server_fd); //server_fd listening for EPOLLIN
     epoll_.add_signal_handling();
 
     deadline_container dc;
 
-    //todo very serious problem here detected. Map cannot be global because of order
-    //  destructor calls. Is order of calls defined? What do to?
     //This map is the only dogma, the source of truth
     std::map<int, std::shared_ptr<echo_client>> all_clients; //map is needed to learn from epoll_event what client is active
 
@@ -93,12 +91,12 @@ void echo_server::start()
                                 client_fd, default_client_buffer_size, dc, default_timeout, epoll_)});
             } else if (res.second[i].data.fd == epoll_.get_signal_fd())
             {
-                utils::ensure(0, utils::is_zero, "Server is closing because of a signal.\n");
+                utils::ensure("Server is closing because of a signal.\n");
                 throw server_exception("Caught signal"); //exception calls all the destructors, nice
-            } else if ((res.second[i].events & EPOLLIN) != 0)
+            } else if (res.second[i].events & EPOLLIN)
             {
                 // if client is ready to write data to us
-                std::shared_ptr<echo_client> client = all_clients.at(res.second[i].data.fd);
+                std::shared_ptr<echo_client> client = all_clients[res.second[i].data.fd];
 
                 if (client->is_nasty(default_buffer_size) || client->read_from_client(default_buffer_size) == 0)
                 {
@@ -112,14 +110,15 @@ void echo_server::start()
                 }
 
                 //if successfully read from client, add it to write to it
+                //todo mb check if size of buffer is not exceeded
                 res.second[res.first].events = EPOLLOUT; //write can be done
                 res.second[res.first++].data.fd = client->get_fd();
             } else if ((res.second[i].events & EPOLLOUT) != 0)
             {
                 //else client has woken up and is ready to read something from our storing buffer
-                std::shared_ptr<echo_client> client = all_clients.at(res.second[i].data.fd);
-//                client->write_to_client();
-                client->test_write_to_client(2);
+                std::shared_ptr<echo_client> client = all_clients[res.second[i].data.fd];
+                client->write_to_client();
+//                client->test_write_to_client(2);
             }
         }
     }

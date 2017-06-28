@@ -1,0 +1,31 @@
+#Binaries and cmake files and idea files
+big_integer/.idea/
+big_integer/build/
+big_integer/main.cpp
+big_integer/cmake-build-debug/
+
+bind/.idea/
+bind/build/
+bind/CMakeLists.txt
+bind/out
+
+lru_cache/.idea/
+lru_cache/build/
+lru_cache/CMakeLists.txt
+
+either/.idea/
+either/build/
+either/CMakeLists.txt
+either/out
+either/a.out
+either/cmake-build-debug
+
+
+*.s 
+*.out
+
+# Profiler files:
+*.data
+*.data.old
+
+

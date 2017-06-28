@@ -45,7 +45,7 @@ public:
     /**
      * Method adds listening socket to epoll, listening to \c EPOLLIN events on it (listening for new clients)
      */
-    void add_server(int server_fd);
+    void add_server(file_descriptor* server_fd);
 
     //method returns number of events occured, when got up
     std::pair<int, epoll_event *> start_sleeping(int timeout);

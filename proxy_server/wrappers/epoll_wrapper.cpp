@@ -39,14 +39,14 @@ int epoll_wrapper::get_signal_fd()
 }
 
 //todo mb merge with add_client
-void epoll_wrapper::add_server(int server_fd)
+void epoll_wrapper::add_server(file_descriptor* server_fd)
 {
     epoll_event event;
     memset(&event, 0, sizeof(epoll_event)); //to avoid valgrind warnings
     event.events = EPOLLIN;
-    event.data.fd = server_fd;
-    utils::ensure(epoll_ctl(epoll_fd.get_fd(), EPOLL_CTL_ADD, server_fd, &event), utils::is_zero,
-                  "Listening socket " + std::to_string(server_fd) + " added to epoll " +
+    event.data.fd = server_fd->get_fd();
+    utils::ensure(epoll_ctl(epoll_fd.get_fd(), EPOLL_CTL_ADD, server_fd->get_fd(), &event), utils::is_zero,
+                  "Listening socket " + std::to_string(server_fd->get_fd()) + " added to epoll " +
                   std::to_string(epoll_fd.get_fd()) + "\n");
 }
 

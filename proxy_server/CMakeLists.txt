@@ -1,8 +1,8 @@
 project(proxy_server)
 cmake_minimum_required(VERSION 3.5)
 set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_FLAGS -g)
-add_executable(${PROJECT_NAME}
+set(CMAKE_CXX_FLAGS)
+add_executable("echo_server"
         main.cpp
         echo_server.cpp echo_server.h
         timeouts/deadline_container.cpp timeouts/deadline_container.h

@@ -18,14 +18,13 @@ struct echo_server
 private:
     static const uint16_t default_port = 8667;
     static const uint16_t default_max_clients = 16;
-    const size_t default_client_buffer_size = 64; //todo why can't be static?
+    const size_t default_client_buffer_size = 64;
     const size_t default_buffer_size = 16;
     const int default_timeout = 10; //secs
 
     uint16_t port;
     epoll_wrapper epoll_;
     file_descriptor server_fd;
-
 
     void start_listening();
 
