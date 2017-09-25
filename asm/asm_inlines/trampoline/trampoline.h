@@ -103,7 +103,7 @@ public:
             char* label_1 = ip; //cycle for shifting
 
             add("\x48\x39\xe0",                                 // cmp  rax, rsp
-                "\x74\x12",                                     // je   12            (*sorry very much, it does jumping 12 lines below *)
+                "\x74\x12",                                     // je   12            (*sorry very much, it does jumping x12 (ie 18 in decimal) lines below *)
                 "\x48\x81\xc4", imm(8, 4),                      // add  rsp, 0x00000008
                 "\x48\x8b\x3c\x24",                             // mov  rdi, [rsp]
                 "\x48\x89\x7c\x24\xf8",                         // mov  [rsp - 8], rdi
