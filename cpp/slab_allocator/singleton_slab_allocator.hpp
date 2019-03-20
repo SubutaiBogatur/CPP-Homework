@@ -13,11 +13,14 @@
 #include <array>
 
 #include <iostream>
+#include "easy_logging.hpp"
 
 static const size_t MIN_SLAB_SIZE = 4096;
 static const size_t SLAB_TYPES = 8; // slabs of pows from 2^3 to 2^(2+SLAB_TYPES) inclusively
 static const size_t MAX_CELL_SIZE = 1 << (2 + SLAB_TYPES);
 static const size_t RESERVED_BYTES = 64;
+
+using namespace logging;
 
 template<size_t SlabSize = MIN_SLAB_SIZE>
 struct singleton_slab_allocator {
@@ -60,8 +63,8 @@ private:
 
     // helpers for list operations, slab|cell!=nullptr, head mb nullptr:
     static void *remove_from_slab_list(void *head_slab, void *slab); // either new head or head_slab is returned
-    static void *add_to_slab_list(void *head_slab, void *slab); // head is returned
-    static void add_to_cell_list(void *slab, void *cell); // modifies reserved area & cell
+    static void *push_to_slab_list(void *head_slab, void *slab); // head is returned
+    static void push_to_cell_list(void *slab, void *cell); // modifies reserved area & cell
     static void *pop_from_cell_list(void *slab); // modifies reserved area
 
     // helpers for reserved area, slab != nullptr:
@@ -82,6 +85,7 @@ private:
     static size_t get_max_cells_in_slab(size_t cell_size);
     static size_t cell_size_from_index(size_t i);
     static size_t index_from_cell_size(size_t cell_size);
+    static void *get_slab_from_cell(void *cell);
 
     // utils:
     static size_t powui(size_t base, size_t pow);
@@ -96,14 +100,17 @@ singleton_slab_allocator<SlabSize>::singleton_slab_allocator() {
         filled_slabs_lists[i] = nullptr;
 
         void *empty_slab = new_slab(cell_size_from_index(i));
-        empty_slabs_lists[i] = add_to_slab_list(empty_slabs_lists[i], empty_slab);
+        empty_slabs_lists[i] = push_to_slab_list(empty_slabs_lists[i], empty_slab);
     }
+    info() << "allocated initial slabs";
 }
 
 template<size_t SlabSize>
 void *singleton_slab_allocator<SlabSize>::new_slab(size_t cell_size) {
     void *slab = aligned_alloc(SlabSize, SlabSize);
     size_t cells_cnt = get_max_cells_in_slab(cell_size); // at the end mb another empty zone, who cares
+
+    info() << "making new slab for cell_size: " << cell_size << " with " << cells_cnt << " cells";
 
     set_cell_size(slab, cell_size);
     set_free_cells_cnt(slab, cells_cnt);
@@ -129,6 +136,8 @@ void *singleton_slab_allocator<SlabSize>::new_slab(size_t cell_size) {
 
 template<size_t SlabSize>
 void *singleton_slab_allocator<SlabSize>::smalloc(size_t n) {
+    info() << "doing smalloc for n: " << n;
+
     if (n > MAX_CELL_SIZE) {
         return malloc(n); // alignment probably not needed
     }
@@ -138,34 +147,62 @@ void *singleton_slab_allocator<SlabSize>::smalloc(size_t n) {
 
     if (wip_slabs_lists[i] == nullptr && empty_slabs_lists[i] == nullptr) {
         void *empty_slab = new_slab(cell_size);
-        empty_slabs_lists[i] = add_to_slab_list(empty_slabs_lists[i], empty_slab);
+        empty_slabs_lists[i] = push_to_slab_list(empty_slabs_lists[i], empty_slab);
     }
 
     if (wip_slabs_lists[i] == nullptr && empty_slabs_lists[i] != nullptr) {
         // todo: should corrupt smth jff later
         void *empty_slab_list_head = empty_slabs_lists[i];
         empty_slabs_lists[i] = remove_from_slab_list(empty_slab_list_head, empty_slab_list_head); // pop head
-        wip_slabs_lists[i] = add_to_slab_list(wip_slabs_lists[i], empty_slab_list_head);
+        wip_slabs_lists[i] = push_to_slab_list(wip_slabs_lists[i], empty_slab_list_head);
     }
 
     void *wip_slab = wip_slabs_lists[i];
     void *cell = pop_from_cell_list(wip_slab);
     if (is_slab_filled(wip_slab)) {
         wip_slabs_lists[i] = remove_from_slab_list(wip_slab, wip_slab);
-        filled_slabs_lists[i] = add_to_slab_list(filled_slabs_lists[i], wip_slab);
+        filled_slabs_lists[i] = push_to_slab_list(filled_slabs_lists[i], wip_slab);
     }
+
+    debug() << "allocated " << get_max_cells_in_slab(cell_size) - get_free_cells_cnt(wip_slab) << "th cell in slab for size " << cell_size;
 
     return cell;
 }
 
 template<size_t SlabSize>
 void singleton_slab_allocator<SlabSize>::sfree(void *ptr, size_t n) {
+    info() << "doing sfree";
+
     if (n > MAX_CELL_SIZE) {
         free(ptr); // can possible store search tree (or even Van Emde Boas tree!!) on ptrs and then not use size
         return;
     }
 
+    void *slab = get_slab_from_cell(ptr);
+    push_to_cell_list(slab, ptr);
 
+    size_t cell_size = get_cell_size(slab);
+    size_t i = index_from_cell_size(cell_size);
+
+    if (get_free_cells_cnt(slab) == 1) { // became wip
+        filled_slabs_lists[i] = remove_from_slab_list(filled_slabs_lists[i], slab);
+        wip_slabs_lists[i] = push_to_slab_list(wip_slabs_lists[i], slab);
+    } else if (is_slab_empty(slab)) { // became empty
+        wip_slabs_lists[i] = remove_from_slab_list(wip_slabs_lists[i], slab);
+        empty_slabs_lists[i] = push_to_slab_list(empty_slabs_lists[i], slab);
+    }
+}
+
+template<size_t SlabSize>
+void singleton_slab_allocator<SlabSize>::clear() {
+    // free all unused slabs
+    for (size_t i = 0; i < SLAB_TYPES; i++) {
+        while (empty_slabs_lists[i] != nullptr) {
+            void *head = empty_slabs_lists[i];
+            empty_slabs_lists[i] = remove_from_slab_list(head, head);
+            free(head);
+        }
+    }
 }
 
 template<size_t SlabSize>
@@ -207,7 +244,7 @@ void *singleton_slab_allocator<SlabSize>::remove_from_slab_list(void *head_slab,
 }
 
 template<size_t SlabSize>
-void *singleton_slab_allocator<SlabSize>::add_to_slab_list(void *head_slab, void *slab) {
+void *singleton_slab_allocator<SlabSize>::push_to_slab_list(void *head_slab, void *slab) {
     // always added as a first one. Why?
     // order is important only in wip_list. When adding there?
     // from empty_list - when wip_list is empty => doesn't matter
@@ -217,7 +254,7 @@ void *singleton_slab_allocator<SlabSize>::add_to_slab_list(void *head_slab, void
 
     if (head_slab == nullptr) {
         set_next_prev_slab(slab, nullptr);
-        return head_slab;
+        return slab;
     }
 
     set_prev_slab(head_slab, slab);
@@ -227,8 +264,8 @@ void *singleton_slab_allocator<SlabSize>::add_to_slab_list(void *head_slab, void
 }
 
 template<size_t SlabSize>
-void singleton_slab_allocator<SlabSize>::add_to_cell_list(void *slab, void *cell) {
-    assert(!is_slab_filled(slab));
+void singleton_slab_allocator<SlabSize>::push_to_cell_list(void *slab, void *cell) {
+    assert(!is_slab_empty(slab));
 
     void *free_list_head = get_free_list_head(slab);
     if (free_list_head == nullptr) {
@@ -244,8 +281,9 @@ void singleton_slab_allocator<SlabSize>::add_to_cell_list(void *slab, void *cell
 
 template<size_t SlabSize>
 void *singleton_slab_allocator<SlabSize>::pop_from_cell_list(void *slab) {
+    assert(!is_slab_filled(slab));
+
     size_t free_cells_cnt = get_free_cells_cnt(slab);
-    assert (free_cells_cnt > 0);
 
     void *free_list_head = get_free_list_head(slab); // cannot be nullptr be invariants
     void *second_list_node = get_next_from_cell(free_list_head); // mb nullptr, np
@@ -376,6 +414,17 @@ size_t singleton_slab_allocator<SlabSize>::index_from_cell_size(size_t cell_size
 
     assert(false);
     return 666;
+}
+
+template<size_t SlabSize>
+void *singleton_slab_allocator<SlabSize>::get_slab_from_cell(void *cell) {
+
+    // todo: why static_cast doesn't work?
+    uintptr_t cell_uint = (uintptr_t) cell;
+    cell_uint = cell_uint - cell_uint % SlabSize;
+    void *slab = (void *) cell_uint;
+
+    return slab;
 }
 
 #endif //CSC_HW_SINGLTON_SLAB_ALLOCATOR_HPP

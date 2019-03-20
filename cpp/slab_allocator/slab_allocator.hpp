@@ -8,7 +8,7 @@
 #include <limits>
 #include "singleton_slab_allocator.hpp"
 
-template<class T, size_t SlabSize>
+template<class T, size_t SlabSize=MIN_SLAB_SIZE>
 struct slab_allocator {
     typedef T value_type;
 
@@ -48,7 +48,7 @@ T *slab_allocator<T, SlabSize>::allocate(size_t n) {
 
 template<class T, size_t SlabSize>
 void slab_allocator<T, SlabSize>::deallocate(T *ptr, size_t n) {
-    instance.sfree(ptr);
+    instance.sfree(ptr, n);
 }
 
 

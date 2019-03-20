@@ -1,20 +1,13 @@
 #include <iostream>
 #include "slab_allocator.hpp"
 #include <vector>
-
-//template <class T>
-//using slab_allocator_100 = slab_allocator<T, 100>;
-
+#include <list>
 
 int main() {
+    std::list<int, slab_allocator<int>> l;
 
-//    slab_allocator<void> a;
-
-//    std::vector<int, slab_allocator<int, 4096>> a;
-//    std::vector<int, slab_allocator<int>> a;
-
-//    std::cout << "done";
-
-//    std::cout << *a << std::endl;
+    for (size_t i = 0; i < 127; i++) {
+        l.push_back(1);
+    }
 
 }
