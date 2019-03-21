@@ -19,7 +19,7 @@ namespace allocators {
     static const size_t SLAB_TYPES = 8; // slabs of pows from 2^3 to 2^(2+SLAB_TYPES) inclusively
     static const size_t MIN_CELL_SIZE = 1 << 3;
     static const size_t MAX_CELL_SIZE = 1 << (2 + SLAB_TYPES);
-    static const size_t RESERVED_BYTES = 64;
+    static const size_t MIN_RESERVED_BYTES = 64;
 
 
     template<size_t SlabSize = MIN_SLAB_SIZE>
@@ -31,7 +31,7 @@ namespace allocators {
             return instance;
         }
 
-        void *smalloc(size_t n); // takes O(1), n -- number of bytes
+        void *smalloc(size_t n); // takes O(1), n -- number of bytes. For n=0 returns unique ptr, no error
         void sfree(void *ptr, size_t n); // takes O(1)
         void clear(); // takes O(|empty slabs|), returns all the empty slabs memory to os
 
@@ -44,7 +44,7 @@ namespace allocators {
 
         // allocator has slabs with cells of different sizes: 8, 16, 32, ..., 1024 - 8 different slab types
         // all the free cells are connected in free-list
-        // every slab has size SlabSize, first 64 bytes of slab are reserved for following data in the following order:
+        // every slab has size SlabSize, first max(64, cell_size) bytes of slab are reserved for following data in the following order:
         // size_t cell_size, size_t free_cells_cnt, void *free_list_head, void *prev_slab, void *next_slab -- totally 40 bytes, getters and setters are provided
         // though it's not obvious, 8 bytes for size_t are reserved (it's size is implementation dependent)
         // for every cell size heads for 3 lists are stored: empty_slabs_list, filled_slabs_list, wip_slabs_list
@@ -82,6 +82,7 @@ namespace allocators {
         static void *get_next_from_cell(void *cell);
         static void set_next_to_cell(void *cell, void *val);
 
+        static size_t get_reserved_area_size(size_t cell_size);
         static size_t get_max_cells_in_slab(size_t cell_size);
         static size_t cell_size_from_index(size_t i);
         static size_t index_from_cell_size(size_t cell_size);
@@ -118,7 +119,7 @@ namespace allocators {
         set_next_prev_slab(slab, nullptr);
 
         // build free-list
-        void *free_list_head = static_cast<char *>(slab) + RESERVED_BYTES;
+        void *free_list_head = static_cast<char *>(slab) + get_reserved_area_size(cell_size);
         for (size_t i = 0; i < cells_cnt; i++) {
             void *cell_start = static_cast<char *>(free_list_head) + i * cell_size;
             if (i == cells_cnt - 1) {
@@ -140,7 +141,7 @@ namespace allocators {
         info() << "doing smalloc for n: " << n;
 
         if (n > MAX_CELL_SIZE) {
-            return malloc(n); // alignment probably not needed
+            return aligned_alloc(n, n); // alignment needed just by task statement
         }
 
         size_t cell_size = std::max(MIN_CELL_SIZE, ceiling_pow2(n));
@@ -397,8 +398,15 @@ namespace allocators {
     }
 
     template<size_t SlabSize>
+    size_t singleton_slab_allocator<SlabSize>::get_reserved_area_size(size_t cell_size) {
+        return std::max(MIN_RESERVED_BYTES, cell_size);
+    }
+
+    template<size_t SlabSize>
     size_t singleton_slab_allocator<SlabSize>::get_max_cells_in_slab(size_t cell_size) {
-        return (SlabSize - RESERVED_BYTES) / cell_size;
+        size_t cells_cnt = (SlabSize - get_reserved_area_size(cell_size)) / cell_size;
+        assert(cells_cnt > 0);
+        return cells_cnt;
     }
 
     template<size_t SlabSize>

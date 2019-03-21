@@ -129,12 +129,12 @@ static void test_deallocation() {
 }
 
 int main() {
-//    test_one_int();
-//    test_string();
-//    test_checker();
+    test_one_int();
+    test_string();
+    test_checker();
     test_alignment();
-//    test_zero_allocation();
-//    test_deallocation();
+    test_zero_allocation();
+    test_deallocation();
 
     std::cout << "Tests passed!" << std::endl;
 }
