@@ -3,11 +3,11 @@
 #include <vector>
 #include <list>
 
-int main() {
-    std::list<int, slab_allocator<int>> l;
-
-    for (size_t i = 0; i < 127; i++) {
-        l.push_back(1);
-    }
-
-}
+//int main() {
+//    std::list<int, allocators::slab<int>> l;
+//
+//    for (size_t i = 0; i < 127; i++) {
+//        l.push_back(1);
+//    }
+//
+//}

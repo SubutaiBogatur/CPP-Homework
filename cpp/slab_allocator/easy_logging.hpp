@@ -19,9 +19,11 @@ namespace logging {
 #ifdef LOGGING
             string_stream << arg;
             return *this;
+#endif
         }
 
         ~base_elogger() {
+#ifdef LOGGING
             std::string output = string_stream.str();
             std::cout << output << std::endl;
 #endif
