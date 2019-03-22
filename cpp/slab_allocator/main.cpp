@@ -9,6 +9,6 @@ struct foo {
     foo(int a, int b) : a(a), b(b) {}
 };
 
-int main() {
-    std::cout << "finished" << std::endl;
-}
+//int main() {
+//    std::cout << "finished" << std::endl;
+//}

@@ -217,7 +217,7 @@ namespace allocators {
         size_t i = index_from_cell_size(cell_size);
         size_t cnt = 0;
 
-        auto func = [](void *slab) { return 1ul; }; // just count slabs
+        auto func = [](void *) { return 1ul; }; // just count slabs
         cnt += for_each_slab_reduce<size_t>(empty_slabs_lists[i], 0, func);
         cnt += for_each_slab_reduce<size_t>(wip_slabs_lists[i], 0, func);
         cnt += for_each_slab_reduce<size_t>(filled_slabs_lists[i], 0, func);

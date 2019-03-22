@@ -14,13 +14,18 @@ namespace logging {
 
         base_elogger(std::string str) : string_stream(str, std::ios_base::ate) {}
 
+#ifdef LOGGING
         template<class T>
         base_elogger &operator<<(const T &arg) {
-#ifdef LOGGING
             string_stream << arg;
             return *this;
-#endif
         }
+#else
+        template<class T>
+        base_elogger &operator<<(const T &) {
+            return *this;
+        }
+#endif
 
         ~base_elogger() {
 #ifdef LOGGING
