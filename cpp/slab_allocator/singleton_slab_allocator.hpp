@@ -9,6 +9,7 @@
 #include <cassert> // for assert
 #include <stdlib.h> // for aligned_alloc
 #include <array>
+#include <functional>
 
 #include "easy_logging.hpp"
 
@@ -39,6 +40,9 @@ namespace allocators {
         size_t capacity(size_t cell_size) const; // takes O(|allocated_slabs|)
         size_t size(size_t cell_size) const; // returns allocated_cells_num, takes O(|allocated_slabs|)
 
+        singleton_slab_allocator(singleton_slab_allocator const &) = delete;
+        singleton_slab_allocator &operator=(singleton_slab_allocator const &) = delete;
+
     private:
         singleton_slab_allocator();
 
@@ -66,6 +70,8 @@ namespace allocators {
         static void *push_to_slab_list(void *head_slab, void *slab); // head is returned
         static void push_to_cell_list(void *slab, void *cell); // modifies reserved area & cell
         static void *pop_from_cell_list(void *slab); // modifies reserved area
+        template<class U>
+        static U for_each_slab_reduce(void *head_slab, U acc_val, std::function<U(void *)> const &);
 
         // helpers for reserved area, slab != nullptr:
         static size_t get_cell_size(void *slab);
@@ -82,6 +88,7 @@ namespace allocators {
         static void *get_next_from_cell(void *cell);
         static void set_next_to_cell(void *cell, void *val);
 
+        static size_t get_filled_cells_cnt(void *slab);
         static size_t get_reserved_area_size(size_t cell_size);
         static size_t get_max_cells_in_slab(size_t cell_size);
         static size_t cell_size_from_index(size_t i);
@@ -89,7 +96,6 @@ namespace allocators {
         static void *get_slab_from_cell(void *cell);
 
         // utils:
-        static size_t powui(size_t base, size_t pow);
         static size_t ceiling_pow2(size_t val); // find pow2 >= val
     };
 
@@ -153,7 +159,6 @@ namespace allocators {
         }
 
         if (wip_slabs_lists[i] == nullptr && empty_slabs_lists[i] != nullptr) {
-            // todo: should corrupt smth jff later
             void *empty_slab_list_head = empty_slabs_lists[i];
             empty_slabs_lists[i] = remove_from_slab_list(empty_slab_list_head, empty_slab_list_head); // pop head
             wip_slabs_lists[i] = push_to_slab_list(wip_slabs_lists[i], empty_slab_list_head);
@@ -166,8 +171,7 @@ namespace allocators {
             filled_slabs_lists[i] = push_to_slab_list(filled_slabs_lists[i], wip_slab);
         }
 
-        debug() << "allocated " << get_max_cells_in_slab(cell_size) - get_free_cells_cnt(wip_slab)
-                << "th cell in slab for size " << cell_size;
+        debug() << "allocated " << get_filled_cells_cnt(wip_slab) << "th cell in slab for size " << cell_size;
 
         return cell;
     }
@@ -206,6 +210,39 @@ namespace allocators {
                 free(head);
             }
         }
+    }
+
+    template<size_t SlabSize>
+    size_t singleton_slab_allocator<SlabSize>::allocated_slabs(size_t cell_size) const {
+        size_t i = index_from_cell_size(cell_size);
+        size_t cnt = 0;
+
+        auto func = [](void *slab) { return 1ul; }; // just count slabs
+        cnt += for_each_slab_reduce<size_t>(empty_slabs_lists[i], 0, func);
+        cnt += for_each_slab_reduce<size_t>(wip_slabs_lists[i], 0, func);
+        cnt += for_each_slab_reduce<size_t>(filled_slabs_lists[i], 0, func);
+
+        return cnt;
+    }
+
+    template<size_t SlabSize>
+    size_t singleton_slab_allocator<SlabSize>::capacity(size_t cell_size) const {
+        size_t slabs = allocated_slabs(cell_size);
+        size_t max_cell_cnt = get_max_cells_in_slab(cell_size);
+
+        return slabs * max_cell_cnt;
+    }
+
+    template<size_t SlabSize>
+    size_t singleton_slab_allocator<SlabSize>::size(size_t cell_size) const {
+        size_t i = index_from_cell_size(cell_size);
+        size_t cnt = 0;
+
+        auto func = [](void *slab) { return get_filled_cells_cnt(slab); }; // just count slabs
+        cnt += for_each_slab_reduce<size_t>(wip_slabs_lists[i], 0, func);
+        cnt += for_each_slab_reduce<size_t>(filled_slabs_lists[i], 0, func);
+
+        return cnt;
     }
 
     template<size_t SlabSize>
@@ -297,6 +334,21 @@ namespace allocators {
     }
 
     template<size_t SlabSize>
+    template<class U>
+    U singleton_slab_allocator<SlabSize>::for_each_slab_reduce(void *head_slab, U acc_val,
+                                                               std::function<U(void *)> const &func) {
+        U acc = acc_val;
+
+        void *cur_slab = head_slab;
+        while (cur_slab != nullptr) {
+            acc += func(cur_slab);
+            cur_slab = get_next_slab(cur_slab);
+        }
+
+        return acc;
+    }
+
+    template<size_t SlabSize>
     size_t singleton_slab_allocator<SlabSize>::get_cell_size(void *slab) {
         void *shifted_slab = slab;
         return *static_cast<size_t *>(shifted_slab);
@@ -373,15 +425,6 @@ namespace allocators {
     }
 
     template<size_t SlabSize>
-    size_t singleton_slab_allocator<SlabSize>::powui(size_t base, size_t pow) {
-        size_t ret = 1;
-        for (size_t i = 0; i < pow; i++) {
-            ret *= base;
-        }
-        return ret;
-    }
-
-    template<size_t SlabSize>
     size_t singleton_slab_allocator<SlabSize>::ceiling_pow2(size_t val) {
         size_t v = val;
 
@@ -395,6 +438,14 @@ namespace allocators {
         v++;
 
         return v;
+    }
+
+    template<size_t SlabSize>
+    size_t singleton_slab_allocator<SlabSize>::get_filled_cells_cnt(void *slab) {
+        size_t max_cells = get_max_cells_in_slab(get_cell_size(slab));
+        size_t free_cells = get_free_cells_cnt(slab);
+
+        return max_cells - free_cells;
     }
 
     template<size_t SlabSize>
@@ -431,11 +482,9 @@ namespace allocators {
 
     template<size_t SlabSize>
     void *singleton_slab_allocator<SlabSize>::get_slab_from_cell(void *cell) {
-
-        // todo: why static_cast doesn't work?
-        uintptr_t cell_uint = (uintptr_t) cell;
+        auto cell_uint = reinterpret_cast<uintptr_t>(cell);
         cell_uint = cell_uint - cell_uint % SlabSize;
-        void *slab = (void *) cell_uint;
+        void *slab = reinterpret_cast<void *>(cell_uint);
 
         return slab;
     }

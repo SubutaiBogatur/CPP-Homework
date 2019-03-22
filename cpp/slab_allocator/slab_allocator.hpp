@@ -18,14 +18,23 @@ namespace allocators {
         };
 
         slab() = default;
+        slab(slab const &other) = default; // just copy or move, shares instance as ref
+
+        slab &operator=(slab const &) = delete; // don't need & don't want assignment
 
         template<class U, size_t SlabSizeOther>
         explicit slab(const slab<U, SlabSizeOther> &) {
-            // todo: seems wrong
+            // explicit forbids using syntax A a = b; only A a(b);
+            // we need A(b) == a, so don't need anything special
         }
 
         T *allocate(size_t n);
         void deallocate(T *ptr, size_t n);
+
+        void clear();
+        size_t allocated_slabs(size_t cell_size) const;
+        size_t capacity(size_t cell_size) const;
+        size_t size(size_t cell_size) const;
 
     private:
         singleton_slab_allocator<SlabSize> &instance = singleton_slab_allocator<SlabSize>::get_instance();
@@ -33,8 +42,7 @@ namespace allocators {
 
     template<class T, class U, size_t SlabSize1, size_t SlabSize2>
     bool operator==(const slab<T, SlabSize1> &, const slab<U, SlabSize2> &) {
-        // todo: check
-        return true; // if they share same singleton instance
+        return SlabSize1 == SlabSize2; // true, if allocated by one, can be freed by another
     }
 
     template<class T, class U, size_t SlabSize1, size_t SlabSize2>
@@ -52,6 +60,25 @@ namespace allocators {
         instance.sfree(ptr, n);
     }
 
+    template<class T, size_t SlabSize>
+    void slab<T, SlabSize>::clear() {
+        instance.clear();
+    }
+
+    template<class T, size_t SlabSize>
+    size_t slab<T, SlabSize>::allocated_slabs(size_t cell_size) const {
+        return instance.allocated_slabs(cell_size);
+    }
+
+    template<class T, size_t SlabSize>
+    size_t slab<T, SlabSize>::capacity(size_t cell_size) const {
+        return instance.capacity(cell_size);
+    }
+
+    template<class T, size_t SlabSize>
+    size_t slab<T, SlabSize>::size(size_t cell_size) const {
+        return instance.size(cell_size);
+    }
 }
 
 

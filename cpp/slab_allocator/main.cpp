@@ -3,11 +3,12 @@
 #include <vector>
 #include <list>
 
-//int main() {
-//    std::list<int, allocators::slab<int>> l;
-//
-//    for (size_t i = 0; i < 127; i++) {
-//        l.push_back(1);
-//    }
-//
-//}
+struct foo {
+    int a;
+    int b;
+    foo(int a, int b) : a(a), b(b) {}
+};
+
+int main() {
+    std::cout << "finished" << std::endl;
+}
