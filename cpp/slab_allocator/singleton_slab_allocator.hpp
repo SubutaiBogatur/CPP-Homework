@@ -106,11 +106,8 @@ namespace allocators {
             empty_slabs_lists[i] = nullptr;
             wip_slabs_lists[i] = nullptr;
             filled_slabs_lists[i] = nullptr;
-
-            void *empty_slab = new_slab(cell_size_from_index(i));
-            empty_slabs_lists[i] = push_to_slab_list(empty_slabs_lists[i], empty_slab);
         }
-        info() << "allocated initial slabs";
+        info() << "created instance";
     }
 
     template<size_t SlabSize>
